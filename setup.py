@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+"""
+Setup script for Deezer RPC
+"""
+from setuptools import setup, find_packages
+
+with open('README.md', 'r', encoding='utf-8') as f:
+    long_description = f.read()
+
+with open('requirements.txt', 'r', encoding='utf-8') as f:
+    requirements = f.read().splitlines()
+
+setup(
+    name="deezer-rpc",
+    version="2.0.0",
+    author="Jakub Sladek",
+    description="Discord Rich Presence for Deezer Music Player",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://github.com/yourusername/deezer-rpc",
+    packages=find_packages(),
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+    python_requires=">=3.6",
+    install_requires=requirements,
+    entry_points={
+        "console_scripts": [
+            "deezer-rpc=deezer_rpc.main:main",
+        ],
+    },
+    include_package_data=True,
+) 

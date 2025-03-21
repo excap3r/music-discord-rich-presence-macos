@@ -1,20 +1,11 @@
 #!/usr/bin/env python3
 """
 Deezer RPC - Discord Rich Presence for Deezer Music Player
+Package entry point
 
-This script displays your currently playing Deezer track on Discord
-using Rich Presence.
-
-Author: Jakub Sladek
-Version: 2.0.0
+This module provides the main entry point when the package is installed
+and called using the 'deezer-rpc' command.
 """
-import os
-import sys
-
-# Add the project root to the Python path
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-# Import required modules
 from deezer_rpc.config.settings import Config
 from deezer_rpc.logging.handlers import Logger
 from deezer_rpc.core.window_manager import WindowManager
