@@ -4,6 +4,9 @@
 [![macOS](https://img.shields.io/badge/Platform-macOS-brightgreen.svg)](https://github.com/excap3r/music-discord-rich-presence-macos/releases)
 [![Discord](https://img.shields.io/badge/Discord-Rich%20Presence-7289DA.svg)](https://discord.com/developers/docs/rich-presence/how-to)
 
+> **⚠️ IMPORTANT: This project is no longer in active development**  
+> This was a personal learning project. For a more comprehensive, actively maintained solution, please check out [Music Presence](https://github.com/ungive/discord-music-presence) which works with any media player and has much more features.
+
 **Show off what you're listening to with your Discord friends in style!**
 
 [Download Latest Release](https://github.com/excap3r/music-discord-rich-presence-macos/releases) | [Report Issue](https://github.com/excap3r/music-discord-rich-presence-macos/issues) | [Contribute](https://github.com/excap3r/music-discord-rich-presence-macos/pulls)
