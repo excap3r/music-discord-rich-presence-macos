@@ -21,8 +21,33 @@ def cleanup():
         os.unlink(spec_file)
     
     # Clean up DMG files
-    if os.path.exists('Music RPC.dmg'):
-        os.remove('Music RPC.dmg')
+    if os.path.exists('Music-Discord-Rich-Presence-Installer.dmg'):
+        os.remove('Music-Discord-Rich-Presence-Installer.dmg')
+    
+    # Clean up any Info.plist files in the root directory
+    if os.path.exists('Info.plist'):
+        os.remove('Info.plist')
+    
+    # Clean up any __pycache__ directories to avoid conflicts
+    for root, dirs, files in os.walk('.'):
+        for dirname in dirs:
+            if dirname == '__pycache__':
+                pycache_path = os.path.join(root, dirname)
+                print(f"Removing {pycache_path}")
+                shutil.rmtree(pycache_path)
+    
+    # Clean up egg-info directories which can cause conflicts
+    egg_info_dirs = [d for d in os.listdir('.') if d.endswith('.egg-info')]
+    for egg_dir in egg_info_dirs:
+        shutil.rmtree(egg_dir)
+        
+    # Force clean pip cache for this project
+    try:
+        subprocess.run(['pip', 'cache', 'remove', 'packaging'], check=False)
+        subprocess.run(['pip', 'cache', 'remove', 'pypresence'], check=False)
+        subprocess.run(['pip', 'cache', 'remove', 'rumps'], check=False)
+    except Exception as e:
+        print(f"Warning: Could not clean pip cache: {e}")
 
 
 def ensure_project_root():
@@ -42,43 +67,49 @@ def create_icns():
     """Create an .icns file from the PNG image for macOS app icon
     
     Returns:
-        bool: True if icon created successfully, False otherwise
+        str: Path to the created ICNS file or None if failed
     """
     print("Creating macOS icon file...")
     
     # Ensure we're working from the project root directory
     project_root = ensure_project_root()
     
+    # Create a temporary directory for icon creation
+    tmp_icon_dir = os.path.join(project_root, 'build', 'tmp_icons')
+    os.makedirs(tmp_icon_dir, exist_ok=True)
+    
+    # Final icon path that will be returned
+    icon_path = os.path.join(tmp_icon_dir, 'Discord_Music_RPC.icns')
+    
     # Check for icon files in the assets directory
     assets_dir = os.path.join(project_root, 'assets')
     print(f"Looking for icon files in: {assets_dir}")
     
-    if os.path.exists(os.path.join(assets_dir, 'music_rpc.png')):
-        shutil.copy(os.path.join(assets_dir, 'music_rpc.png'), 'music_rpc.png')
-        print("Copied music_rpc.png from assets directory")
-    
-    if os.path.exists(os.path.join(assets_dir, 'music_rpc.ico')):
-        shutil.copy(os.path.join(assets_dir, 'music_rpc.ico'), 'music_rpc.ico')
-        print("Copied music_rpc.ico from assets directory")
-    
-    # Assets directory has a pre-built icns file we can use
+    # Check if we already have a pre-built icns file in assets
     if os.path.exists(os.path.join(assets_dir, 'music_rpc.icns')):
-        shutil.copy(os.path.join(assets_dir, 'music_rpc.icns'), 'Music_RPC.icns')
-        print("Using pre-built music_rpc.icns from assets directory")
-        return True
+        shutil.copy(os.path.join(assets_dir, 'music_rpc.icns'), icon_path)
+        print(f"Using pre-built music_rpc.icns from assets directory: {icon_path}")
+        return icon_path
     
-    # Verify we have the PNG file now
-    if not os.path.exists('music_rpc.png'):
+    # Copy PNG to temporary directory if it exists
+    png_path = os.path.join(tmp_icon_dir, 'music_rpc.png')
+    if os.path.exists(os.path.join(assets_dir, 'music_rpc.png')):
+        shutil.copy(os.path.join(assets_dir, 'music_rpc.png'), png_path)
+        print(f"Copied music_rpc.png from assets directory to {png_path}")
+    elif os.path.exists('music_rpc.png'):
+        shutil.copy('music_rpc.png', png_path)
+        print(f"Copied music_rpc.png from root directory to {png_path}")
+    else:
         print("WARNING: Cannot find music_rpc.png icon file. Default icon will be used.")
         # Create a simple placeholder icon if needed
-        with open('music_rpc.png', 'wb') as f:
+        with open(png_path, 'wb') as f:
             f.write(b'P')  # Just to create a file, will be ignored by PyInstaller
-        return False
+        return None
     
-    print(f"Found icon file: {os.path.abspath('music_rpc.png')}")
+    print(f"Using icon file: {png_path}")
     
     # Create a temporary iconset directory
-    iconset_dir = 'Music_RPC.iconset'
+    iconset_dir = os.path.join(tmp_icon_dir, 'Discord_Music_RPC.iconset')
     if not os.path.exists(iconset_dir):
         os.makedirs(iconset_dir)
     
@@ -90,7 +121,7 @@ def create_icns():
             subprocess.run([
                 'sips',
                 '-z', str(size), str(size),
-                'music_rpc.png',
+                png_path,
                 '--out', f'{iconset_dir}/icon_{size}x{size}.png'
             ])
             
@@ -99,14 +130,14 @@ def create_icns():
                 subprocess.run([
                     'sips',
                     '-z', str(size), str(size),
-                    'music_rpc.png',
+                    png_path,
                     '--out', f'{iconset_dir}/icon_{size}x{size}@2x.png'
                 ])
         
         # Use iconutil to create the icns file
         try:
-            subprocess.run(['iconutil', '-c', 'icns', iconset_dir], check=True)
-            print("Successfully created Music_RPC.icns")
+            subprocess.run(['iconutil', '-c', 'icns', iconset_dir, '-o', icon_path], check=True)
+            print(f"Successfully created Discord_Music_RPC.icns at {icon_path}")
             success = True
         except subprocess.CalledProcessError:
             print(f"{iconset_dir}: Failed to generate ICNS.")
@@ -119,7 +150,7 @@ def create_icns():
     if os.path.exists(iconset_dir):
         shutil.rmtree(iconset_dir)
     
-    return success
+    return icon_path if success else None
 
 
 def create_info_plist():
@@ -137,17 +168,17 @@ def create_info_plist():
     <key>CFBundleDevelopmentRegion</key>
     <string>English</string>
     <key>CFBundleDisplayName</key>
-    <string>Music RPC</string>
+    <string>Music Discord Rich Presence</string>
     <key>CFBundleExecutable</key>
-    <string>Music RPC</string>
+    <string>Music Discord Rich Presence</string>
     <key>CFBundleIconFile</key>
-    <string>Music_RPC.icns</string>
+    <string>Discord_Music_RPC.icns</string>
     <key>CFBundleIdentifier</key>
-    <string>com.jakubsladek.musicrpc</string>
+    <string>com.jakubsladek.musicdiscordrpc</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Music RPC</string>
+    <string>Music Discord Rich Presence</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -245,8 +276,13 @@ def create_dmg(app_path, icon_path=None):
         print(f"App not found at: {app_path}")
         return False
     
-    # Use explicit DMG name 
-    dmg_name = "Music-RPC-Installer.dmg"
+    # Use the DMG name specified in the README
+    dmg_name = "Music-Discord-Rich-Presence-Installer.dmg"
+    dmg_path = os.path.abspath(os.path.join('dist', dmg_name))
+    
+    # Remove any existing DMG file
+    if os.path.exists(dmg_path):
+        os.remove(dmg_path)
     
     try:
         # Check if create-dmg is installed
@@ -261,23 +297,29 @@ def create_dmg(app_path, icon_path=None):
     
     # Prepare a temporary directory for DMG creation
     tmp_dir = os.path.abspath("dist/tmp_dmg")
+    if os.path.exists(tmp_dir):
+        shutil.rmtree(tmp_dir)
     os.makedirs(tmp_dir, exist_ok=True)
     
     # Copy the app to the temporary directory
     app_name = os.path.basename(app_path)
-    shutil.copytree(app_path, os.path.join(tmp_dir, app_name), symlinks=True)
+    try:
+        shutil.copytree(app_path, os.path.join(tmp_dir, app_name), symlinks=True)
+    except Exception as e:
+        print(f"Error copying app to temporary directory: {e}")
+        return False
     
     # Create the DMG command
     dmg_cmd = [
         'create-dmg',
-        '--volname', 'Music RPC',
+        '--volname', 'Music Discord Rich Presence',
         '--window-pos', '200', '120',
         '--window-size', '800', '400',
         '--icon-size', '100',
         '--icon', app_name, '200', '200',
         '--app-drop-link', '600', '200',
         '--no-internet-enable',
-        os.path.join('dist', dmg_name),
+        dmg_path,
         tmp_dir
     ]
     
@@ -286,14 +328,33 @@ def create_dmg(app_path, icon_path=None):
         dmg_cmd.extend(['--volicon', icon_path])
     
     # Run the command
-    result = subprocess.run(dmg_cmd)
+    print(f"Running DMG creation command: {' '.join(dmg_cmd)}")
+    result = subprocess.run(dmg_cmd, capture_output=True, text=True)
     
     # Clean up the temporary directory
-    shutil.rmtree(tmp_dir, ignore_errors=True)
+    try:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    except Exception as e:
+        print(f"Warning: Could not clean up temporary directory: {e}")
     
     if result.returncode == 0:
-        print(f"DMG installer created successfully: dist/{dmg_name}")
-        return True
+        if os.path.exists(dmg_path):
+            print(f"DMG installer created successfully: {dmg_path}")
+            # Copy the DMG to the root directory for easier access
+            root_dmg_path = os.path.join(os.getcwd(), dmg_name)
+            try:
+                shutil.copy2(dmg_path, root_dmg_path)
+                print(f"DMG also copied to: {root_dmg_path}")
+            except Exception as e:
+                print(f"Warning: Could not copy DMG to root directory: {e}")
+            return True
+        else:
+            print(f"DMG creation command succeeded but DMG file not found at: {dmg_path}")
+            print(f"create-dmg output: {result.stdout}")
+            print(f"create-dmg errors: {result.stderr}")
+            return False
     else:
-        print("Failed to create DMG installer.")
+        print(f"Failed to create DMG installer. Return code: {result.returncode}")
+        print(f"create-dmg output: {result.stdout}")
+        print(f"create-dmg errors: {result.stderr}")
         return False 

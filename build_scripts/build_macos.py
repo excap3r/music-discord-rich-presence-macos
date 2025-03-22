@@ -29,18 +29,13 @@ def build_app_py2app():
         print(f"ERROR: main.py not found in {os.getcwd()}")
         return False
     
-    # Check for necessary icon files
-    icns_file = 'Music_RPC.icns'
-    if not os.path.exists(icns_file):
-        # Try to convert from png if possible
-        create_icns()
-        
-        # If still doesn't exist after trying to create it, we need to use a different name
-        if not os.path.exists(icns_file) and os.path.exists('music_rpc.icns'):
-            icns_file = 'music_rpc.icns'
-        elif not os.path.exists(icns_file):
-            print(f"WARNING: Icon file {icns_file} not found. App will use default icon.")
-            icns_file = None
+    # Create or find icon file
+    icns_file = create_icns()
+    if not icns_file and os.path.exists('music_rpc.icns'):
+        icns_file = 'music_rpc.icns'
+    elif not icns_file:
+        print("WARNING: No icon file found. App will use default icon.")
+        icns_file = None
     
     # Setup py2app configuration
     APP = ['main.py']
@@ -58,9 +53,9 @@ def build_app_py2app():
         'argv_emulation': False,  # Set to False to avoid issues with macOS
         'plist': {
             'LSUIElement': True,  # Makes the app a background app with only a menu bar icon
-            'CFBundleName': 'Music RPC',
-            'CFBundleDisplayName': 'Music RPC',
-            'CFBundleIdentifier': 'com.jakubsladek.musicrpc',
+            'CFBundleName': 'Music Discord Rich Presence',
+            'CFBundleDisplayName': 'Music Discord Rich Presence',
+            'CFBundleIdentifier': 'com.jakubsladek.musicdiscordrpc',
             'CFBundleVersion': '2.0.0',
             'CFBundleShortVersionString': '2.0.0',
             'NSHumanReadableCopyright': 'Copyright © 2023 Jakub Sladek. All rights reserved.',
@@ -90,6 +85,14 @@ def build_app_py2app():
         ],
         # Exclude some modules to reduce size
         'excludes': ['tkinter', 'PyQt5', 'PyQt6', 'PySide2', 'PySide6', 'matplotlib', 'pandas', 'scipy', 'numpy'],
+        # Force not semi-standalone mode to avoid packaging issues
+        'semi_standalone': False,
+        # Explicitly set the dist directory
+        'dist_dir': 'dist',
+        # Use a specific site-packages to avoid collisions
+        'site_packages': True,
+        # Force overwrite
+        'force_overwrite': True
     }
     
     # Add iconfile option if icon exists
@@ -97,9 +100,11 @@ def build_app_py2app():
         OPTIONS['iconfile'] = icns_file
     
     # Run py2app
-    sys.argv = [sys.argv[0], 'py2app']
+    print("Configuring py2app build...")
+    sys.argv = [sys.argv[0], 'py2app', '--dist-dir=dist', '--use-faulthandler']
     try:
         setup(
+            name="Music Discord Rich Presence",
             app=APP,
             data_files=DATA_FILES,
             options={'py2app': OPTIONS},
@@ -107,7 +112,7 @@ def build_app_py2app():
         )
         
         # Fix permissions on the resulting app bundle
-        app_path = 'dist/Music RPC.app'
+        app_path = 'dist/Music Discord Rich Presence.app'
         if os.path.exists(app_path):
             subprocess.run(['chmod', '-R', '755', app_path])
             print(f"Successfully built app: {app_path}")
@@ -117,6 +122,8 @@ def build_app_py2app():
             return False
     except Exception as e:
         print(f"ERROR: py2app build failed: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -127,19 +134,29 @@ def main():
     # Clean up previous builds
     cleanup()
     
-    # Create macOS icon file
-    create_icns()
-    
     # Build macOS app
     if build_app_py2app():
         print("App built successfully!")
         
         # Build DMG installer
-        app_path = os.path.abspath("dist/Music RPC.app")
-        icon_path = "Music_RPC.icns" if os.path.exists("Music_RPC.icns") else None
+        app_path = os.path.abspath("dist/Music Discord Rich Presence.app")
+        if not os.path.exists(app_path):
+            print(f"ERROR: App not found at {app_path}. Cannot create DMG.")
+            return
+            
+        icon_path = create_icns()  # Get the icon path again
         
         if create_dmg(app_path, icon_path):
             print("DMG installer created successfully!")
+            dmg_file = "Music-Discord-Rich-Presence-Installer.dmg"
+            expected_locations = [
+                os.path.join(os.getcwd(), 'dist', dmg_file),
+                os.path.join(os.getcwd(), dmg_file)
+            ]
+            
+            for location in expected_locations:
+                if os.path.exists(location):
+                    print(f"DMG installer is available at: {location}")
         else:
             print("App built successfully but DMG creation failed. The app is still available in the 'dist' directory.")
     else:

@@ -35,7 +35,7 @@ def build_app_pyinstaller():
     
     # Create the Info.plist file
     plist_path = create_info_plist()
-    print(f"Creating Info.plist file...")
+    print(f"Creating Info.plist file at: {plist_path}")
     
     # Find and ensure nowplaying-cli
     nowplaying_cli_path = ensure_nowplaying_cli()
@@ -46,23 +46,24 @@ def build_app_pyinstaller():
     
     # Create a bin directory if it doesn't exist
     bin_dir = "bin"
-    if not os.path.exists(bin_dir):
-        os.makedirs(bin_dir)
+    if os.path.exists(bin_dir):
+        shutil.rmtree(bin_dir)
+    os.makedirs(bin_dir, exist_ok=True)
     
     # Copy nowplaying-cli to the bin directory
     local_nowplaying_cli = os.path.join(bin_dir, "nowplaying-cli")
     shutil.copy(nowplaying_cli_path, local_nowplaying_cli)
     os.chmod(local_nowplaying_cli, 0o755)  # Make executable
+    print(f"Copied nowplaying-cli to: {local_nowplaying_cli}")
     
-    # Make sure we have an icon file
-    icon_path = "Music_RPC.icns"
+    # Create or find icon file
+    icon_path = create_icns()
+    if icon_path:
+        print(f"Using icon file at: {icon_path}")
+    else:
+        print("No icon file found. Default icon will be used.")
+    
     assets_dir = os.path.join(project_root, 'assets')
-    
-    # Check icon files in various locations
-    if not os.path.exists(icon_path):
-        if os.path.exists(os.path.join(assets_dir, 'music_rpc.icns')):
-            shutil.copy(os.path.join(assets_dir, 'music_rpc.icns'), icon_path)
-            print(f"Copied icon from {os.path.join(assets_dir, 'music_rpc.icns')}")
     
     # Prepare data files to include
     data_files = []
@@ -72,15 +73,17 @@ def build_app_pyinstaller():
     if os.path.exists('music_rpc.png'):
         png_icon = 'music_rpc.png'
     elif os.path.exists(os.path.join(assets_dir, 'music_rpc.png')):
-        shutil.copy(os.path.join(assets_dir, 'music_rpc.png'), 'music_rpc.png')
-        png_icon = 'music_rpc.png'
+        png_path = os.path.join('build', 'tmp_icons', 'music_rpc.png')
+        os.makedirs(os.path.dirname(png_path), exist_ok=True)
+        shutil.copy(os.path.join(assets_dir, 'music_rpc.png'), png_path)
+        png_icon = png_path
     
     if png_icon:
         data_files.append(f"--add-data={png_icon}:.")
         print(f"Adding data file: {png_icon}")
     
     # Add the ICNS file if it exists
-    if os.path.exists(icon_path):
+    if icon_path:
         data_files.append(f"--add-data={icon_path}:.")
         print(f"Adding data file: {icon_path}")
     
@@ -89,11 +92,14 @@ def build_app_pyinstaller():
         "pyinstaller",
         "--clean",
         "--windowed",
-        "--name=Music RPC"
+        "--name=Music Discord Rich Presence",
+        "--distpath=./dist",
+        "--workpath=./build",
+        "--noconfirm"
     ]
     
     # Add icon if it exists
-    if os.path.exists(icon_path):
+    if icon_path:
         pyinstaller_cmd.append(f"--icon={icon_path}")
         print(f"Using icon: {icon_path}")
     
@@ -123,7 +129,7 @@ def build_app_pyinstaller():
         "--hidden-import=unicodedata",
         "--recursive-copy-metadata=pypresence",
         "--collect-submodules=music_rpc",  # Updated from deezer_rpc to music_rpc
-        "--osx-bundle-identifier=com.jakubsladek.musicrpc",
+        "--osx-bundle-identifier=com.jakubsladek.musicdiscordrpc",
         "main.py"  # Main script path
     ])
     
@@ -137,7 +143,7 @@ def build_app_pyinstaller():
         return False
     
     # Manually copy the Info.plist to the app bundle
-    app_path = "dist/Music RPC.app"
+    app_path = "dist/Music Discord Rich Presence.app"
     contents_path = os.path.join(app_path, "Contents")
     
     # Ensure contents directory exists
@@ -146,6 +152,7 @@ def build_app_pyinstaller():
     # Copy Info.plist and ensure it has the right permissions
     shutil.copy("Info.plist", os.path.join(contents_path, "Info.plist"))
     os.chmod(os.path.join(contents_path, "Info.plist"), 0o644)
+    print(f"Copied Info.plist to {os.path.join(contents_path, 'Info.plist')}")
     
     # Copy resources that might be needed
     resources_path = os.path.join(contents_path, "Resources")
@@ -161,6 +168,7 @@ def build_app_pyinstaller():
         # Copy it again if it's not there
         shutil.copy(nowplaying_cli_path, app_nowplaying_cli)
     os.chmod(app_nowplaying_cli, 0o755)  # Make executable
+    print(f"Ensured nowplaying-cli is in app bundle and executable: {app_nowplaying_cli}")
     
     # Create an environment settings script to ensure proper environment variables
     env_script_path = os.path.join(contents_path, "MacOS", "env_settings.sh")
@@ -174,22 +182,23 @@ export PATH="$(dirname "$0")/bin:$PATH"
 
 # Check if nowplaying-cli exists and is executable
 if [ -x "$(dirname "$0")/bin/nowplaying-cli" ]; then
-    echo "nowplaying-cli found and is executable" >> ~/Music_RPC_debug.log
+    echo "nowplaying-cli found and is executable" >> ~/Music_Discord_RPC_debug.log
 else
-    echo "ERROR: nowplaying-cli not found or not executable in $(dirname "$0")/bin" >> ~/Music_RPC_debug.log
-    ls -la "$(dirname "$0")/bin" >> ~/Music_RPC_debug.log
+    echo "ERROR: nowplaying-cli not found or not executable in $(dirname "$0")/bin" >> ~/Music_Discord_RPC_debug.log
+    ls -la "$(dirname "$0")/bin" >> ~/Music_Discord_RPC_debug.log
 fi
 
 # Execute the actual application
-exec "$(dirname "$0")/Music RPC.bin" "$@"
+exec "$(dirname "$0")/Music Discord Rich Presence.bin" "$@"
 """)
     
     os.chmod(env_script_path, 0o755)
+    print(f"Created environment settings script at {env_script_path}")
     
     # Rename the original executable and create a wrapper script
     macos_path = os.path.join(contents_path, "MacOS")
-    original_executable_path = os.path.join(macos_path, "Music RPC")
-    renamed_executable_path = os.path.join(macos_path, "Music RPC.bin")
+    original_executable_path = os.path.join(macos_path, "Music Discord Rich Presence")
+    renamed_executable_path = os.path.join(macos_path, "Music Discord Rich Presence.bin")
     
     if os.path.exists(original_executable_path):
         # Rename the original executable
@@ -205,6 +214,7 @@ cd "$(dirname "$0")"
         
         # Make it executable
         os.chmod(original_executable_path, 0o755)
+        print("Created wrapper script for the executable")
     
     # Create a debug run script 
     run_script_path = os.path.join(macos_path, "debug_run.sh")
@@ -217,19 +227,19 @@ export LANG=en_US.UTF-8
 export PATH="$(dirname "$0")/bin:$PATH"
 
 cd "$(dirname "$0")"
-echo "Starting Music RPC in debug mode..."
-echo "System PATH: $PATH" > ~/Music_RPC_debug.log
-echo "Checking for nowplaying-cli:" >> ~/Music_RPC_debug.log
+echo "Starting Music Discord Rich Presence in debug mode..."
+echo "System PATH: $PATH" > ~/Music_Discord_RPC_debug.log
+echo "Checking for nowplaying-cli:" >> ~/Music_Discord_RPC_debug.log
 if [ -x "$(dirname "$0")/bin/nowplaying-cli" ]; then
-    echo "nowplaying-cli found and is executable" >> ~/Music_RPC_debug.log
-    ls -la "$(dirname "$0")/bin" >> ~/Music_RPC_debug.log
+    echo "nowplaying-cli found and is executable" >> ~/Music_Discord_RPC_debug.log
+    ls -la "$(dirname "$0")/bin" >> ~/Music_Discord_RPC_debug.log
 else
-    echo "ERROR: nowplaying-cli not found or not executable in $(dirname "$0")/bin" >> ~/Music_RPC_debug.log
-    ls -la "$(dirname "$0")/bin" >> ~/Music_RPC_debug.log
+    echo "ERROR: nowplaying-cli not found or not executable in $(dirname "$0")/bin" >> ~/Music_Discord_RPC_debug.log
+    ls -la "$(dirname "$0")/bin" >> ~/Music_Discord_RPC_debug.log
 fi
 
 # Try to run the app with output redirected to debug log
-./\"Music RPC\" >> ~/Music_RPC_debug.log 2>&1
+./\"Music Discord Rich Presence\" >> ~/Music_Discord_RPC_debug.log 2>&1
 """)
     
     os.chmod(run_script_path, 0o755)
@@ -238,7 +248,7 @@ fi
     print(f"Successfully built app: {app_path}")
     print("If the app doesn't start, try running the debug script inside the app bundle:")
     print(f"cd '{macos_path}' && ./debug_run.sh")
-    print("Check ~/Music_RPC_debug.log for error messages")
+    print("Check ~/Music_Discord_RPC_debug.log for error messages")
     
     return True
 
@@ -250,19 +260,30 @@ def main():
     # Clean up previous builds
     cleanup()
     
-    # Create macOS icon file
-    create_icns()
-    
     # Build macOS app
     if build_app_pyinstaller():
         print("App built successfully!")
         
         # Create DMG installer
-        app_path = os.path.abspath("dist/Music RPC.app")
-        icon_path = "Music_RPC.icns" if os.path.exists("Music_RPC.icns") else None
+        app_path = os.path.abspath("dist/Music Discord Rich Presence.app")
+        if not os.path.exists(app_path):
+            print(f"ERROR: App not found at {app_path}. Cannot create DMG.")
+            return
+            
+        icon_path = create_icns()  # Get the icon path
         
         if create_dmg(app_path, icon_path):
             print("DMG installer created successfully!")
+            dmg_file = "Music-Discord-Rich-Presence-Installer.dmg"
+            expected_locations = [
+                os.path.join(os.getcwd(), 'dist', dmg_file),
+                os.path.join(os.getcwd(), dmg_file)
+            ]
+            
+            for location in expected_locations:
+                if os.path.exists(location):
+                    print(f"DMG installer is available at: {location}")
+                    print(f"You can install it by double-clicking on {location}")
         else:
             print("App built successfully but DMG creation failed. The app is still available in the 'dist' directory.")
     else:

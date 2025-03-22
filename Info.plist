@@ -5,17 +5,17 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>English</string>
     <key>CFBundleDisplayName</key>
-    <string>Music RPC</string>
+    <string>Music Discord Rich Presence</string>
     <key>CFBundleExecutable</key>
-    <string>Music RPC</string>
+    <string>Music Discord Rich Presence</string>
     <key>CFBundleIconFile</key>
-    <string>Music_RPC.icns</string>
+    <string>Discord_Music_RPC.icns</string>
     <key>CFBundleIdentifier</key>
-    <string>com.jakubsladek.musicrpc</string>
+    <string>com.jakubsladek.musicdiscordrpc</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Music RPC</string>
+    <string>Music Discord Rich Presence</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
