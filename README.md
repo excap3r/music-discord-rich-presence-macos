@@ -1,4 +1,4 @@
-# Music RPC
+# Music Discord Rich Presence for macOS
 
 ![Music RPC](music_rpc.png)
 
@@ -19,14 +19,16 @@ Discord Rich Presence for Music Players on macOS.
 
 ## About
 
-Music RPC adds Discord Rich Presence integration for various music players on macOS. Show off what you're listening to with your Discord friends in style!
+Music Discord Rich Presence for macOS adds Discord Rich Presence integration for various music players on macOS. Show off what you're listening to with your Discord friends in style!
 
-Originally created for Deezer, Music RPC now supports multiple music players including:
+Originally created for Deezer, this app now supports:
 - Deezer
-- Apple Music
 - iTunes
-- Tidal (with limited functionality)
-- More players coming soon!
+- Tidal
+
+**Note about Apple Music**: Apple Music is no longer supported as it now has its own native Discord Rich Presence integration. This prevents conflicts and provides a better experience for Apple Music users.
+
+Want support for another player? Feel free to open an issue to request it. New player support is considered based on user demand.
 
 ## Features
 
@@ -50,10 +52,10 @@ Originally created for Deezer, Music RPC now supports multiple music players inc
 
 ### Option 1: DMG Installer (Recommended)
 
-1. Download the latest `Music-RPC-Installer.dmg` from the [Releases](https://github.com/yourusername/music-rpc/releases) page
+1. Download the latest `Music-Discord-Rich-Presence-Installer.dmg` from the [Releases](https://github.com/yourusername/music-rpc/releases) page
 2. Open the DMG file
-3. Drag the Music RPC app to your Applications folder
-4. Launch Music RPC from your Applications folder
+3. Drag the Music Discord Rich Presence app to your Applications folder
+4. Launch Music Discord Rich Presence from your Applications folder
 5. You'll see the 🎵 icon in your menu bar when the app is running
 
 ### Option 2: Install from Source
@@ -98,17 +100,17 @@ Originally created for Deezer, Music RPC now supports multiple music players inc
 
 ### Getting Started
 
-1. Launch Music RPC from your Applications folder
+1. Launch Music Discord Rich Presence from your Applications folder
 2. Grant Accessibility permissions when prompted
    - Required to detect music players and retrieve song information
    - Open System Settings > Privacy & Security > Accessibility
-   - Ensure Music RPC is checked in the list
+   - Ensure Music Discord Rich Presence is checked in the list
 3. Start playing music in a supported player
 4. Your Discord status will automatically update with the currently playing song
 
 ### Menu Bar Options
 
-Music RPC operates through its menu bar icon (🎵). Click it to see:
+Music Discord Rich Presence operates through its menu bar icon (🎵). Click it to see:
 
 - **Playing**: Shows the title of the currently playing song
 - **Artist**: Shows the artist of the currently playing song
@@ -128,19 +130,19 @@ To ensure Discord integration works properly:
 
 ### Auto-Launch on Startup
 
-To make Music RPC start automatically when you log in:
+To make Music Discord Rich Presence start automatically when you log in:
 
 1. Open System Settings > General > Login Items
 2. Click the + button
 3. Browse to your Applications folder
-4. Select Music RPC and click "Open"
+4. Select Music Discord Rich Presence and click "Open"
 
 ## Configuration
 
 ### Configuration File
 
-Music RPC stores its configuration in a JSON file:
-- When installed via DMG: `~/Library/Application Support/Music RPC/config.json`
+Music Discord Rich Presence stores its configuration in a JSON file:
+- When installed via DMG: `~/Library/Application Support/Music Discord Rich Presence/config.json`
 - When running from source: In the application directory
 
 ### Core Settings
@@ -166,7 +168,8 @@ When running from source, the following arguments are available:
 
 | Argument | Description |
 |----------|-------------|
-| `--debug` | Enable debug mode with verbose logging |
+| `--debug`, `-d` | Enable debug logging |
+| `--verbose`, `-v` | Enable verbose logging (INFO level) |
 | `--config /path/to/config.json` | Use a custom configuration file |
 | `--disable-discord` | Run without Discord integration |
 | `--interval N` | Set update interval to N seconds |
@@ -202,12 +205,12 @@ When troubleshooting issues, you can enable debug logging:
 #### Discord status not updating
 - Make sure Discord desktop app is running
 - Check that "Display current activity as a status message" is enabled in Discord settings
-- Verify that Music RPC has Accessibility permissions
+- Verify that Music Discord Rich Presence has Accessibility permissions
 
 #### Song not being detected
 - Make sure you're using a supported music player
 - Verify the music player is currently playing a song
-- Check that Music RPC has Accessibility permissions
+- Check that Music Discord Rich Presence has Accessibility permissions
 
 #### Application crashes or freezes
 - Check the log file (`music_rpc.log`) for error messages
@@ -222,7 +225,7 @@ The application creates a log file named `music_rpc.log` in the directory where 
 
 #### If Installed via DMG
 1. Open the Applications folder in Finder
-2. Drag Music RPC to the Trash
+2. Drag Music Discord Rich Presence to the Trash
 3. Empty the Trash
 
 #### If Installed from Source
@@ -234,7 +237,7 @@ The application creates a log file named `music_rpc.log` in the directory where 
 
 ## Architecture
 
-Music RPC is built with a modular architecture that separates concerns and allows for easy extension:
+Music Discord Rich Presence for macOS is built with a modular architecture that separates concerns and allows for easy extension:
 
 ### Core Components
 
@@ -243,10 +246,6 @@ Music RPC is built with a modular architecture that separates concerns and allow
 - **Discord Presence**: Manages the Discord Rich Presence connection and updates
 - **Window Manager**: Detects and manages window titles for song information extraction
 - **Song Info**: Processes and enriches song information from various sources
-
-### UI Components
-
-- **Tray Icon**: Provides a system tray icon with menu options and status display
 
 ### Project Structure
 
@@ -261,7 +260,7 @@ music-rpc/
 │   │   └── player_detection/  # Player detection
 │   │       ├── base.py     # Base interfaces
 │   │       ├── deezer.py   # Deezer implementation
-│   │       ├── apple_music.py  # Apple Music implementation
+│   │       ├── apple_music.py  # Apple Music implementation (disabled)
 │   │       └── registry.py # Player registry
 │   ├── ui/                 # UI components
 │   │   └── tray_icon.py    # System tray icon
@@ -306,6 +305,8 @@ python main.py --debug
 ```
 
 ### Adding Support for a New Music Player
+
+While we're not actively adding new players, contributions are welcome:
 
 1. Create a new file in `music_rpc/core/player_detection/` (e.g., `spotify.py`)
 2. Implement the `MusicPlayerDetector` interface with player-specific detection logic:
@@ -421,7 +422,7 @@ Please follow the code style guidelines and include tests for new functionality.
 
 ## Future Improvements
 
-1. Add support for more music players (Spotify, VLC, etc.)
+1. Add support for more music players based on user requests
 2. Implement a proper GUI for configuration
 3. Add support for Windows and Linux
 4. Implement automated testing
