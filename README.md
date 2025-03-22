@@ -9,12 +9,47 @@ Discord Rich Presence for Music Players on macOS.
 - [About](#about)
 - [Features](#features)
 - [Installation](#installation)
+  - [Requirements](#requirements)
+  - [System Permissions](#system-permissions)
+  - [Prerequisites](#prerequisites)
+  - [Installation Options](#option-1-dmg-installer-recommended)
 - [Usage](#usage)
+  - [Getting Started](#getting-started)
+  - [How Song Detection Works](#how-song-detection-works)
+  - [Menu Bar Options](#menu-bar-options)
+  - [Discord Integration](#discord-integration)
+  - [Auto-Launch on Startup](#auto-launch-on-startup)
 - [Configuration](#configuration)
+  - [Configuration File](#configuration-file)
+  - [Core Settings](#core-settings)
+  - [Discord Settings](#discord-settings)
+  - [Command-Line Arguments](#command-line-arguments)
+  - [Advanced Configuration](#advanced-configuration)
 - [Troubleshooting](#troubleshooting)
+  - [Common Issues](#common-issues)
+  - [Log File](#log-file)
+  - [Uninstallation](#uninstallation)
 - [Architecture](#architecture)
+  - [Core Components](#core-components)
+  - [Song Information Retrieval](#song-information-retrieval)
+  - [Project Structure](#project-structure)
 - [Development](#development)
+  - [Development Environment Setup](#development-environment-setup)
+  - [Running in Development Mode](#running-in-development-mode)
+  - [Adding UI Features](#adding-ui-features)
+  - [Building and Packaging](#building-and-packaging)
+  - [Testing](#testing)
+  - [Code Style Guidelines](#code-style-guidelines)
+  - [Development Tips](#development-tips)
 - [Contributing](#contributing)
+- [Future Improvements](#future-improvements)
+  - [Planned Features](#planned-features)
+  - [Development Roadmap](#development-roadmap)
+- [Frequently Asked Questions](#frequently-asked-questions)
+  - [General Questions](#general-questions)
+  - [Technical Questions](#technical-questions)
+  - [Troubleshooting FAQ](#troubleshooting)
+- [Credits](#credits)
 - [License](#license)
 
 ## About
@@ -49,6 +84,34 @@ Want support for another player? Feel free to open an issue to request it. New p
 - Discord desktop app
 - Python 3.9+ (if installing from source)
 - One of the supported music players
+- [nowplaying-cli](https://github.com/kirtan-shah/nowplaying-cli) (automatically included in the DMG installer)
+
+### System Permissions
+
+The app requires certain permissions to function properly:
+
+1. **Accessibility**: Required to detect music players and read window titles
+   - Go to System Settings → Privacy & Security → Accessibility
+   - Add Music Discord Rich Presence to the list and enable it
+
+2. **Automation** (macOS Sonoma and higher): 
+   - Go to System Settings → Privacy & Security → Automation
+   - Allow Music Discord Rich Presence to control "System Events"
+
+3. **Screen Recording** (may be required on some systems):
+   - In some cases, especially on macOS Sonoma, you may need to grant screen recording permissions
+   - Go to System Settings → Privacy & Security → Screen Recording
+   - Add Music Discord Rich Presence to the list and enable it
+
+### Prerequisites
+
+If you're installing from source or building your own app, you'll need to install nowplaying-cli:
+
+```bash
+brew install nowplaying-cli
+```
+
+This CLI tool is required for retrieving currently playing song information from macOS players.
 
 ### Option 1: DMG Installer (Recommended)
 
@@ -101,12 +164,33 @@ Want support for another player? Feel free to open an issue to request it. New p
 ### Getting Started
 
 1. Launch Music Discord Rich Presence from your Applications folder
-2. Grant Accessibility permissions when prompted
-   - Required to detect music players and retrieve song information
-   - Open System Settings > Privacy & Security > Accessibility
-   - Ensure Music Discord Rich Presence is checked in the list
+2. Grant the required permissions when prompted:
+   - Accessibility permissions for detecting music player windows
+   - Automation permissions for interacting with system events
+   - Screen Recording permissions if needed (on macOS Sonoma+)
 3. Start playing music in a supported player
 4. Your Discord status will automatically update with the currently playing song
+
+### How Song Detection Works
+
+Music Discord Rich Presence uses multiple methods to detect and retrieve song information:
+
+1. **nowplaying-cli**: The primary method uses the Media Remote API via nowplaying-cli to get detailed song information from the system's current media player.
+2. **Window Title Parsing**: For some players like Deezer, the app can extract song information from the window title.
+3. **Process Detection**: The app checks which music player applications are currently running.
+
+This multi-layered approach ensures reliable song detection across different players.
+
+#### About nowplaying-cli
+
+[nowplaying-cli](https://github.com/kirtan-shah/nowplaying-cli) is a command-line tool that accesses the macOS Media Remote API, allowing us to retrieve information about currently playing media from various players. The app uses this tool to:
+
+- Get current song title, artist, and album
+- Retrieve playback status (playing, paused)
+- Get track duration and current position
+- Identify which player is currently active
+
+When the DMG installer is used, nowplaying-cli is included automatically in the application bundle. When running from source, you need to install it via Homebrew as described in the Prerequisites section.
 
 ### Menu Bar Options
 
@@ -210,12 +294,36 @@ When troubleshooting issues, you can enable debug logging:
 #### Song not being detected
 - Make sure you're using a supported music player
 - Verify the music player is currently playing a song
-- Check that Music Discord Rich Presence has Accessibility permissions
+- Check that Music Discord Rich Presence has all required permissions
+- Ensure nowplaying-cli is installed (if using the source version)
+  ```bash
+  which nowplaying-cli
+  ```
+- Try running nowplaying-cli manually to see if it detects your player:
+  ```bash
+  nowplaying-cli get
+  ```
+- If nowplaying-cli returns no output, try running it with root permissions (once) to fix any permissions issues:
+  ```bash
+  sudo nowplaying-cli get
+  ```
+
+#### nowplaying-cli not working
+- If you're getting errors related to nowplaying-cli, try these steps:
+  1. Reinstall nowplaying-cli: `brew reinstall kirtan-shah/tap/nowplaying-cli`
+  2. Run it manually to verify it works: `nowplaying-cli get`
+  3. Check permissions: `ls -la $(which nowplaying-cli)`
+  4. Make sure it's executable: `chmod +x $(which nowplaying-cli)`
+  5. If all else fails, try running once with sudo: `sudo nowplaying-cli get`
 
 #### Application crashes or freezes
 - Check the log file (`music_rpc.log`) for error messages
 - Make sure you have the latest version of the app
 - For macOS Sonoma and higher, ensure you've granted all necessary permissions
+- Try reinstalling nowplaying-cli:
+  ```bash
+  brew reinstall kirtan-shah/tap/nowplaying-cli
+  ```
 
 ### Log File
 
@@ -242,10 +350,18 @@ Music Discord Rich Presence for macOS is built with a modular architecture that 
 ### Core Components
 
 - **App**: The main application controller that orchestrates all components
-- **Player Detection**: Abstractions and implementations for detecting music players and retrieving song information
 - **Discord Presence**: Manages the Discord Rich Presence connection and updates
 - **Window Manager**: Detects and manages window titles for song information extraction
-- **Song Info**: Processes and enriches song information from various sources
+- **Song Info**: Processes and enriches song information from various sources using nowplaying-cli and other methods
+
+### Song Information Retrieval
+
+The `SongInfoRetriever` class handles all song detection using these methods:
+
+1. **Media Remote API**: Uses nowplaying-cli to access the macOS Media Remote API
+2. **Process Detection**: Checks running processes to identify active media players
+3. **Window Title Parsing**: Extracts song info from application window titles
+4. **API Enrichment**: Enhances song info with additional metadata from the Deezer API
 
 ### Project Structure
 
@@ -256,12 +372,7 @@ music-rpc/
 │   │   ├── app.py          # Main application class
 │   │   ├── discord_presence.py  # Discord integration
 │   │   ├── song_info.py    # Song info processing
-│   │   ├── window_manager.py  # Window detection
-│   │   └── player_detection/  # Player detection
-│   │       ├── base.py     # Base interfaces
-│   │       ├── deezer.py   # Deezer implementation
-│   │       ├── apple_music.py  # Apple Music implementation (disabled)
-│   │       └── registry.py # Player registry
+│   │   └── window_manager.py  # Window detection
 │   ├── ui/                 # UI components
 │   │   └── tray_icon.py    # System tray icon
 │   ├── config/             # Configuration
@@ -296,6 +407,11 @@ music-rpc/
    pip install pytest pytest-cov mypy black isort flake8
    ```
 
+4. Install nowplaying-cli:
+   ```bash
+   brew install kirtan-shah/tap/nowplaying-cli
+   ```
+
 ### Running in Development Mode
 
 Run the application in debug mode for development:
@@ -304,47 +420,10 @@ Run the application in debug mode for development:
 python main.py --debug
 ```
 
-### Adding Support for a New Music Player
+You can also run with additional logging for troubleshooting:
 
-While we're not actively adding new players, contributions are welcome:
-
-1. Create a new file in `music_rpc/core/player_detection/` (e.g., `spotify.py`)
-2. Implement the `MusicPlayerDetector` interface with player-specific detection logic:
-
-```python
-from .base import MusicPlayerDetector
-from ..song_info import SongInfo
-from typing import Optional
-
-class SpotifyPlayerDetector(MusicPlayerDetector):
-    @property
-    def player_name(self) -> str:
-        return "Spotify"
-    
-    def is_running(self) -> bool:
-        # Implement detection logic for Spotify
-        pass
-    
-    def get_current_song(self) -> Optional[SongInfo]:
-        # Implement song information retrieval
-        pass
-        
-    def extract_song_info_from_window(self, window_title: str) -> Optional[SongInfo]:
-        # Parse window title for song info
-        pass
-```
-
-3. Register your player in `registry.py`:
-
-```python
-from .spotify import SpotifyPlayerDetector
-
-# In the initialize_player_registry function:
-try:
-    spotify_detector = SpotifyPlayerDetector(config, logger)
-    registry.register_player(spotify_detector)
-except Exception as e:
-    logger.error(f"Failed to initialize Spotify player detector: {e}")
+```bash
+python main.py --debug --verbose
 ```
 
 ### Adding UI Features
@@ -420,13 +499,96 @@ mypy music_rpc/
 
 Please follow the code style guidelines and include tests for new functionality.
 
+### Development Tips
+
+1. Use `--debug` flag for detailed logging during development
+2. Review `song_info.py` to understand how song detection works
+3. Check the log file regularly while developing new features
+4. Test across different music players to ensure wide compatibility
+5. Use type hints and docstrings for all new code
+
 ## Future Improvements
 
-1. Add support for more music players based on user requests
-2. Implement a proper GUI for configuration
-3. Add support for Windows and Linux
-4. Implement automated testing
-5. Create platform-specific installers
+### Planned Features
+
+1. **Enhanced Player Support**
+   - Add support for more music players based on user requests
+   - Improve detection reliability for existing players
+
+2. **Better User Experience**
+   - Implement a proper GUI for configuration
+   - Add localization for multiple languages
+   - Improve first-run experience with better permission guidance
+
+3. **Cross-Platform Support**
+   - Develop Windows version with equivalent functionality
+   - Create Linux version for popular distributions
+   - Unify codebase for easier maintenance across platforms
+
+4. **Technical Improvements**
+   - Implement automated testing and CI/CD pipeline
+   - Optimize resource usage for lower system impact
+   - Enhance song metadata retrieval with additional APIs
+
+5. **Discord Integration**
+   - Add support for custom buttons in Discord presence
+   - Implement playlist sharing functionality
+   - Add music recommendations feature
+
+### Development Roadmap
+
+- **Short Term (Next Release)**
+  - Improve song detection reliability
+  - Add support for additional macOS players
+  - Fix reported bugs and stability issues
+
+- **Medium Term (3-6 months)**
+  - Implement configuration GUI
+  - Begin Windows version development
+  - Add automated testing
+
+- **Long Term (6+ months)**
+  - Complete cross-platform support
+  - Add advanced features (playlist sharing, recommendations)
+  - Implement localization
+
+## Frequently Asked Questions
+
+### General Questions
+
+**Q: Why doesn't Apple Music work with this app?**  
+A: Apple Music now has its own native Discord Rich Presence integration. To avoid conflicts and provide the best experience, we've disabled support for Apple Music in this app.
+
+**Q: How does the app detect what I'm listening to?**  
+A: The app uses multiple methods, primarily the nowplaying-cli tool that interfaces with the macOS Media Remote API to get information about currently playing media.
+
+**Q: Will this work with browser-based players like YouTube Music or Spotify Web?**  
+A: Currently, the app works best with desktop applications. Browser-based players may be detected in some cases but with limited information.
+
+### Technical Questions
+
+**Q: Does this app collect any personal data?**  
+A: No. The app only reads information about your currently playing music and sends it to Discord's Rich Presence API. No data is collected or sent to any other servers.
+
+**Q: Why does the app need Accessibility and Screen Recording permissions?**  
+A: These permissions are required to detect music players and read window titles to extract song information. The app never records your screen content.
+
+**Q: How much system resources does this app use?**  
+A: The app is designed to be lightweight. It typically uses less than 50MB of memory and minimal CPU. The update interval setting lets you control how often it checks for song changes.
+
+**Q: Can I use my own Discord application?**  
+A: Yes, you can configure a custom Discord client ID in the settings. This allows you to use your own Discord application with custom assets.
+
+### Troubleshooting
+
+**Q: The app doesn't detect my player, what can I do?**  
+A: Check that your player is supported and that you've granted all necessary permissions. Try running nowplaying-cli manually to see if it can detect your player.
+
+**Q: My Discord status shows the wrong song information**  
+A: There might be a delay in updates. Try adjusting the update interval in the settings to a lower value. If the problem persists, check if multiple media players are running simultaneously.
+
+**Q: How do I completely uninstall the app?**  
+A: Delete the app from your Applications folder. Additionally, you can remove the configuration file from `~/Library/Application Support/Music Discord Rich Presence/config.json`.
 
 ## Credits
 

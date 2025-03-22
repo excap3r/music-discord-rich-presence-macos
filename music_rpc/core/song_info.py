@@ -9,12 +9,10 @@ album art and other metadata.
 import re
 import subprocess
 import requests
-import json
 import sys
 import os
-import time
 import unicodedata
-from typing import Dict, List, Optional, Any, Union, Tuple, Callable
+from typing import Dict, Optional, Any
 from urllib.parse import quote
 
 from ..config.settings import Config
