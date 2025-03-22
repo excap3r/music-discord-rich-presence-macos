@@ -3,7 +3,6 @@
 Shared build utilities for macOS app build scripts
 """
 import os
-import sys
 import subprocess
 import shutil
 
@@ -67,16 +66,6 @@ def create_icns():
         shutil.copy(os.path.join(assets_dir, 'music_rpc.icns'), 'Music_RPC.icns')
         print("Using pre-built music_rpc.icns from assets directory")
         return True
-    
-    # If no pre-built icns, use any available icon files
-    # Rename the icon file if using the old deezer_rpc naming
-    if os.path.exists('deezer_rpc.png') and not os.path.exists('music_rpc.png'):
-        shutil.copy('deezer_rpc.png', 'music_rpc.png')
-        print("Using deezer_rpc.png renamed to music_rpc.png")
-    
-    if os.path.exists('deezer_rpc.ico') and not os.path.exists('music_rpc.ico'):
-        shutil.copy('deezer_rpc.ico', 'music_rpc.ico')
-        print("Using deezer_rpc.ico renamed to music_rpc.ico")
     
     # Verify we have the PNG file now
     if not os.path.exists('music_rpc.png'):

@@ -1,8 +1,4 @@
-# Music Discord Rich Presence for macOS 🎵
-
-<div align="center">
-
-![Music RPC](music_rpc.png)
+# Music Discord Rich Presence for macOS
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/Platform-macOS-brightgreen.svg)](https://github.com/yourusername/music-rpc/releases)
@@ -12,8 +8,6 @@
 
 [Download Latest Release](https://github.com/yourusername/music-rpc/releases) | [Report Issue](https://github.com/yourusername/music-rpc/issues) | [Contribute](https://github.com/yourusername/music-rpc/pulls)
 
-</div>
-
 ---
 
 ## 📋 Contents
@@ -21,47 +15,14 @@
 - [About](#-about)
 - [Features](#-features)
 - [Installation](#-installation)
-  - [Requirements](#-requirements)
-  - [System Permissions](#-system-permissions)
-  - [Prerequisites](#-prerequisites)
-  - [Installation Options](#-installation-options)
 - [Usage](#-usage)
-  - [Quick Start Guide](#-quick-start-guide)
-  - [Getting Started](#-getting-started)
-  - [How Song Detection Works](#-how-song-detection-works)
-  - [Menu Bar Options](#-menu-bar-options)
-  - [Discord Integration](#-discord-integration)
-  - [Auto-Launch on Startup](#-auto-launch-on-startup)
 - [Configuration](#-configuration)
-  - [Configuration File](#-configuration-file)
-  - [Core Settings](#-core-settings)
-  - [Discord Settings](#-discord-settings)
-  - [Command-Line Arguments](#-command-line-arguments)
-  - [Advanced Configuration](#-advanced-configuration)
 - [Troubleshooting](#-troubleshooting)
-  - [Common Issues](#-common-issues)
-  - [Log File](#-log-file)
-  - [Uninstallation](#-uninstallation)
 - [Architecture](#-architecture)
-  - [Core Components](#-core-components)
-  - [Song Information Retrieval](#-song-information-retrieval)
-  - [Project Structure](#-project-structure)
 - [Development](#-development)
-  - [Development Environment Setup](#-development-environment-setup)
-  - [Running in Development Mode](#-running-in-development-mode)
-  - [Adding UI Features](#-adding-ui-features)
-  - [Building and Packaging](#-building-and-packaging)
-  - [Testing](#-testing)
-  - [Code Style Guidelines](#-code-style-guidelines)
-  - [Development Tips](#-development-tips)
 - [Contributing](#-contributing)
 - [Future Improvements](#-future-improvements)
-  - [Planned Features](#-planned-features)
-  - [Development Roadmap](#-development-roadmap)
 - [Frequently Asked Questions](#-frequently-asked-questions)
-  - [General Questions](#-general-questions)
-  - [Technical Questions](#-technical-questions)
-  - [Troubleshooting FAQ](#-troubleshooting-faq)
 - [Credits](#-credits)
 - [License](#-license)
 
@@ -70,10 +31,6 @@
 ## 🔍 About
 
 Music Discord Rich Presence for macOS adds Discord Rich Presence integration for various music players on macOS. Show off what you're listening to with your Discord friends in style!
-
-<div align="center">
-  <img src="https://github.com/yourusername/music-rpc/raw/main/assets/discord_example.png" alt="Discord Rich Presence Example" width="400">
-</div>
 
 Originally created for Deezer, this app now supports:
 - 🎵 **Deezer**
@@ -147,10 +104,6 @@ Required to detect music players and read window titles
 - Go to System Settings → Privacy & Security → Accessibility
 - Add Music Discord Rich Presence to the list and enable it
 
-<div align="center">
-  <img src="https://github.com/yourusername/music-rpc/raw/main/assets/accessibility_permission.png" alt="Accessibility Permission" width="400">
-</div>
-
 #### 2️⃣ Automation (macOS Sonoma and higher)
 - Go to System Settings → Privacy & Security → Automation
 - Allow Music Discord Rich Presence to control "System Events"
@@ -182,10 +135,6 @@ This CLI tool is required for retrieving currently playing song information from
 3. Drag the Music Discord Rich Presence app to your Applications folder
 4. Launch Music Discord Rich Presence from your Applications folder
 5. You'll see the 🎵 icon in your menu bar when the app is running
-
-<div align="center">
-  <img src="https://github.com/yourusername/music-rpc/raw/main/assets/dmg_installer.png" alt="DMG Installer" width="400">
-</div>
 </details>
 
 <details>
@@ -251,10 +200,6 @@ This CLI tool is required for retrieving currently playing song information from
 3. Start playing music in a supported player
 4. Your Discord status will automatically update with the currently playing song
 
-<div align="center">
-  <img src="https://github.com/yourusername/music-rpc/raw/main/assets/menu_bar.png" alt="Menu Bar" width="400">
-</div>
-
 ### 🔍 How Song Detection Works
 
 Music Discord Rich Presence uses two primary methods to detect and retrieve song information:
@@ -279,10 +224,6 @@ When the DMG installer is used, nowplaying-cli is included automatically in the 
 
 Music Discord Rich Presence operates through its menu bar icon (🎵). Click it to see:
 
-<div align="center">
-  <img src="https://github.com/yourusername/music-rpc/raw/main/assets/menu_options.png" alt="Menu Options" width="300">
-</div>
-
 - **📝 Playing**: Shows the title of the currently playing song
 - **👤 Artist**: Shows the artist of the currently playing song
 - **🎵 Player**: Shows which music player is currently active
@@ -299,10 +240,6 @@ To ensure Discord integration works properly:
 2. In Discord, go to User Settings > Activity Settings
 3. Ensure "Display current activity as a status message" is enabled
 
-<div align="center">
-  <img src="https://github.com/yourusername/music-rpc/raw/main/assets/discord_settings.png" alt="Discord Settings" width="400">
-</div>
-
 ### ⏰ Auto-Launch on Startup
 
 To make Music Discord Rich Presence start automatically when you log in:
@@ -311,10 +248,6 @@ To make Music Discord Rich Presence start automatically when you log in:
 2. Click the + button
 3. Browse to your Applications folder
 4. Select Music Discord Rich Presence and click "Open"
-
-<div align="center">
-  <img src="https://github.com/yourusername/music-rpc/raw/main/assets/login_items.png" alt="Login Items" width="400">
-</div>
 
 ---
 
@@ -796,11 +729,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-<div align="center">
-  <p>Made with ❤️ for music lovers and Discord users</p>
-  <p>
-    <a href="https://github.com/yourusername/music-rpc/stargazers">
-      <img src="https://img.shields.io/github/stars/yourusername/music-rpc?style=social" alt="GitHub stars">
-    </a>
-  </p>
-</div>
+Made with ❤️ for music lovers and Discord users
