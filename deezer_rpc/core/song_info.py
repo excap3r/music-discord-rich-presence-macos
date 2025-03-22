@@ -4,6 +4,10 @@ Song information retrieval functionality
 import re
 import subprocess
 import requests
+import json
+import sys
+import os
+import time
 
 # For macOS MediaPlayer import
 try:
@@ -16,16 +20,61 @@ except ImportError:
 class SongInfo:
     """Stores information about a song"""
     
-    def __init__(self, title=None, artist=None, album_cover=None, artist_image=None, song_link=None):
-        self.title = title or "Not playing"
-        self.artist = artist or "Open Deezer and play a song"
+    def __init__(self, title=None, artist=None, album=None, album_cover=None, artist_image=None, 
+                 song_link=None, duration=0, elapsed=0, playing=False):
+        # Ensure proper Unicode encoding for text fields
+        self.title = self._ensure_unicode(title) or "Not playing"
+        self.artist = self._ensure_unicode(artist) or "Open Deezer and play a song"
+        self.album = self._ensure_unicode(album)
         self.album_cover = album_cover
         self.artist_image = artist_image
         self.song_link = song_link
+        self.duration = duration
+        self.elapsed = elapsed
+        self.playing = playing
+    
+    def _ensure_unicode(self, text):
+        """Ensure the text is properly encoded as Unicode"""
+        if text is None:
+            return None
+        
+        # Convert non-string types to string
+        if not isinstance(text, str):
+            try:
+                if isinstance(text, bytes):
+                    return text.decode('utf-8')
+                return str(text)
+            except Exception:
+                return str(text)
+        
+        try:
+            # Check for Unicode escape sequences
+            if '\\u' in text or '\\U' in text:
+                # Replace Unicode escape sequences with their character equivalents
+                def replace_unicode_escapes(match):
+                    try:
+                        escape_seq = match.group(0)
+                        # Convert to proper Python escape sequence and evaluate
+                        if escape_seq.startswith('\\U'):
+                            code_point = int(escape_seq[2:], 16)
+                            return chr(code_point)
+                        elif escape_seq.startswith('\\u'):
+                            code_point = int(escape_seq[2:], 16)
+                            return chr(code_point)
+                        return escape_seq
+                    except Exception:
+                        return '[?]'
+                
+                # Find and replace all Unicode escape sequences
+                text = re.sub(r'\\U[0-9a-fA-F]{4,8}|\\u[0-9a-fA-F]{4}', replace_unicode_escapes, text)
+            return text
+        except Exception:
+            # If there's an encoding issue, strip problematic characters
+            return text.replace('\\U', 'U').replace('\\u', 'u')
     
     def is_playing(self):
         """Check if a song is actually playing"""
-        return self.title != "Not playing"
+        return self.title != "Not playing" and self.playing
 
 
 class SongInfoRetriever:
@@ -44,37 +93,112 @@ class SongInfoRetriever:
         self.song_cache = {}
         self.last_song_key = None
     
-    def format_deezer_title(self, raw_title):
-        """Extract song title and artist from window title
+    def _ensure_unicode(self, text):
+        """Ensure the text is properly encoded as Unicode"""
+        if text is None:
+            return None
         
-        Args:
-            raw_title (str): Raw window title
+        # Convert non-string types to string
+        if not isinstance(text, str):
+            try:
+                if isinstance(text, bytes):
+                    return text.decode('utf-8')
+                return str(text)
+            except Exception:
+                return str(text)
+        
+        try:
+            # Check for Unicode escape sequences
+            if '\\u' in text or '\\U' in text:
+                # Replace Unicode escape sequences with their character equivalents
+                def replace_unicode_escapes(match):
+                    try:
+                        escape_seq = match.group(0)
+                        # Convert to proper Python escape sequence and evaluate
+                        if escape_seq.startswith('\\U'):
+                            code_point = int(escape_seq[2:], 16)
+                            return chr(code_point)
+                        elif escape_seq.startswith('\\u'):
+                            code_point = int(escape_seq[2:], 16)
+                            return chr(code_point)
+                        return escape_seq
+                    except Exception:
+                        return '[?]'
+                
+                # Find and replace all Unicode escape sequences
+                text = re.sub(r'\\U[0-9a-fA-F]{4,8}|\\u[0-9a-fA-F]{4}', replace_unicode_escapes, text)
+            return text
+        except Exception:
+            # If there's an encoding issue, strip problematic characters
+            return text.replace('\\U', 'U').replace('\\u', 'u')
+    
+    def check_deezer_is_running(self):
+        """Check if Deezer is running"""
+        try:
+            result = subprocess.run(["pgrep", "-i", "Deezer"], 
+                                  capture_output=True, text=True)
+            return result.returncode == 0
+        except Exception as e:
+            self.logger.error(f"Error checking if Deezer is running: {e}")
+            return False
+    
+    def get_now_playing(self):
+        """Get the currently playing song information using nowplaying-cli"""
+        try:
+            # Run nowplaying-cli get-raw to get all available information
+            result = subprocess.run(["nowplaying-cli", "get-raw"], 
+                                  capture_output=True, text=True, check=True, encoding='utf-8')
             
-        Returns:
-            tuple: (song_title, artist_name)
-        """
-        # If we have just the app name, return placeholder values
-        if raw_title.lower() == "deezer":
-            return "Not playing", "Open Deezer and play a song"
-        
-        # Check if it's in "Song - Artist" format
-        if " - " in raw_title:
-            title_parts = raw_title.split(" - ")
-            if len(title_parts) >= 2:
-                song_title = title_parts[0].strip()
-                artist_name = title_parts[1].strip()
-                return song_title, artist_name
-        
-        # Check if it's from AppleScript description format
-        if "now playing" in raw_title.lower():
-            match = re.search(r"now playing[:\s]+(.+?)\s+by\s+(.+?)(?:\s+on|$)", raw_title.lower())
-            if match:
-                song_title = match.group(1).strip()
-                artist_name = match.group(2).strip()
-                return song_title, artist_name
-        
-        # If we couldn't parse it in a known format, return the raw title and unknown
-        return raw_title, "Unknown"
+            # Parse the output into a dictionary
+            info = {}
+            raw_output = result.stdout.strip()
+            
+            # Check if there's any output
+            if not raw_output:
+                return None
+                
+            # Convert the output to a proper Python dictionary
+            # Clean up the output by removing curly braces
+            output_lines = raw_output.strip("{}\n").split("\n")
+            
+            for line in output_lines:
+                line = line.strip()
+                if not line or "=" not in line:
+                    continue
+                    
+                # Split by the first equals sign
+                key, value = line.split("=", 1)
+                
+                # Clean up the key and value
+                key = key.strip()
+                # Handle escaped unicode characters
+                value = value.strip().strip('";')
+                
+                # Try to handle Unicode escape sequences
+                if '\\u' in value or '\\U' in value:
+                    value = self._ensure_unicode(value)
+                
+                # Add to our info dictionary
+                info[key] = value
+            
+            # Extract the relevant information
+            song_info = {
+                "title": info.get("kMRMediaRemoteNowPlayingInfoTitle", "Unknown"),
+                "artist": info.get("kMRMediaRemoteNowPlayingInfoArtist", "Unknown"),
+                "album": info.get("kMRMediaRemoteNowPlayingInfoAlbum", "Unknown"),
+                "duration": info.get("kMRMediaRemoteNowPlayingInfoDuration", "0"),
+                "elapsed": info.get("kMRMediaRemoteNowPlayingInfoElapsedTime", "0"),
+                "playing": True if info.get("kMRMediaRemoteNowPlayingInfoPlaybackRate", "0") != "0" else False
+            }
+            
+            return song_info
+            
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Error executing nowplaying-cli: {e}")
+            return None
+        except Exception as e:
+            self.logger.error(f"Unexpected error getting now playing info: {e}")
+            return None
     
     def get_song_via_api(self, song_title, artist_name):
         """Get song details from Deezer API
@@ -94,8 +218,17 @@ class SongInfoRetriever:
             return self.song_cache[cache_key]
         
         # Otherwise fetch from API
-        query = f"{artist_name} {song_title}"
+        # Ensure query is properly URL encoded
         try:
+            # Ensure song title and artist name are properly encoded
+            song_title = self._ensure_unicode(song_title)
+            artist_name = self._ensure_unicode(artist_name)
+            
+            # Encode the artist name and song title to handle special characters
+            query_artist = artist_name.encode('utf-8', 'ignore').decode('utf-8')
+            query_title = song_title.encode('utf-8', 'ignore').decode('utf-8')
+            query = f"{query_artist} {query_title}"
+            
             response = requests.get(self.config.DEEZER_API_SEARCH_URL + query)
             response.raise_for_status()
             data = response.json()
@@ -112,10 +245,11 @@ class SongInfoRetriever:
                     album_cover = "deezer_logo"
                     artist_image = "deezer_icon"
                 
-                # Create song info object
+                # Create song info object with now playing data
                 song_info = SongInfo(
                     title=song_title,
                     artist=artist_name,
+                    album=song.get("album", {}).get("title", "Unknown"),
                     album_cover=album_cover,
                     artist_image=artist_image,
                     song_link=song["link"]
@@ -125,8 +259,11 @@ class SongInfoRetriever:
                 self.song_cache[cache_key] = song_info
                 
                 return song_info
+                
         except requests.RequestException as e:
             self.logger.error(f"Failed to fetch song info: {e}")
+        except UnicodeError as e:
+            self.logger.error(f"Unicode encoding error when fetching song info: {e}")
 
         # Create basic info for failed requests
         basic_info = SongInfo(title=song_title, artist=artist_name)
@@ -136,246 +273,67 @@ class SongInfoRetriever:
         
         return basic_info
     
-    def get_now_playing_from_control_center(self):
-        """Get Now Playing info from Control Center
-        
-        Returns:
-            str: Now playing info or None
-        """
-        script = '''
-        on run
-            try
-                tell application "System Events"
-                    tell process "ControlCenter"
-                        set nowPlayingText to ""
-                        
-                        set allElements to every UI element
-                        repeat with anElement in allElements
-                            set elemDesc to description of anElement
-                            if elemDesc contains "Now Playing" or elemDesc contains "now playing" then
-                                set nowPlayingText to elemDesc
-                                exit repeat
-                            end if
-                        end repeat
-                        
-                        if nowPlayingText is not "" then
-                            if nowPlayingText contains "Now playing " then
-                                set theText to text from (offset of "Now playing " in nowPlayingText) + (length of "Now playing ") to end of nowPlayingText
-                                if theText contains " by " then
-                                    set songName to text from beginning of theText to ((offset of " by " in theText) - 1)
-                                    set artistName to text from ((offset of " by " in theText) + 4) to end of theText
-                                    if artistName contains " on " then
-                                        set artistName to text from beginning of artistName to ((offset of " on " in artistName) - 1)
-                                    end if
-                                    return songName & " - " & artistName
-                                end if
-                            end if
-                            return nowPlayingText
-                        end if
-                    end tell
-                end tell
-            end try
-            return ""
-        end run
-        '''
-        
-        try:
-            result = subprocess.run(
-                ["osascript", "-e", script],
-                capture_output=True,
-                text=True
-            )
-            
-            if result.stdout.strip():
-                return result.stdout.strip()
-        except Exception as e:
-            self.logger.error(f"Error getting Control Center info: {e}")
-            
-        return None
-    
-    def get_deezer_direct_info(self):
-        """Get direct info from Deezer app
-        
-        Returns:
-            str: Song info or None
-        """
-        # First try using osascript to check if Deezer is playing
-        script_check = '''
-        on run
-            set isRunning to false
-            set isPlaying to false
-            set trackInfo to ""
-            
-            try
-                tell application "Deezer"
-                    set isRunning to it is running
-                    if isRunning then
-                        try
-                            set isPlaying to player state is playing
-                            if isPlaying then
-                                set trackInfo to "PLAYING: " & name of current track & " - " & artist of current track
-                            else
-                                set trackInfo to "NOT_PLAYING"
-                            end if
-                        on error errMsg
-                            set trackInfo to "ERROR: " & errMsg
-                        end try
-                    else
-                        set trackInfo to "NOT_RUNNING"
-                    end if
-                end tell
-            on error errMsg
-                set trackInfo to "SCRIPT_ERROR: " & errMsg
-            end try
-            
-            return trackInfo
-        end run
-        '''
-        
-        try:
-            result_check = subprocess.run(
-                ["osascript", "-e", script_check],
-                capture_output=True,
-                text=True
-            )
-            
-            if result_check.stdout.strip():
-                if result_check.stdout.strip().startswith("PLAYING:"):
-                    # Extract the song info from the status
-                    song_info = result_check.stdout.strip().replace("PLAYING: ", "")
-                    return song_info
-        except Exception as e:
-            self.logger.error(f"Error checking Deezer status: {e}")
-        
-        # Try original direct method
-        script_direct = '''
-        tell application "Deezer" 
-            try
-                if it is running then
-                    try
-                        set track_name to name of current track
-                        set artist_name to artist of current track
-                        
-                        return track_name & " - " & artist_name
-                    end try
-                end if
-            end try
-        end tell
-        '''
-        
-        try:
-            result = subprocess.run(
-                ["osascript", "-e", script_direct], 
-                capture_output=True, 
-                text=True
-            )
-            
-            if result.stdout.strip():
-                return result.stdout.strip()
-                
-        except Exception as e:
-            self.logger.error(f"Error with direct script: {e}")
-                
-        # If direct methods fail, try System Events to get window title
-        try:
-            script_window = '''
-            tell application "System Events"
-                tell process "Deezer"
-                    try
-                        set windowTitle to name of window 1
-                        return windowTitle
-                    on error
-                        return ""
-                    end try
-                end tell
-            end tell
-            '''
-            
-            result_window = subprocess.run(
-                ["osascript", "-e", script_window],
-                capture_output=True,
-                text=True
-            )
-            
-            if result_window.stdout.strip() and " - " in result_window.stdout.strip():
-                return result_window.stdout.strip()
-        except Exception as e:
-            self.logger.error(f"Error with window title script: {e}")
-            
-        return None
-    
     def get_current_song_info(self, window_title=None):
-        """Try multiple methods to get current song info
+        """Get current song info using nowplaying-cli
         
         Args:
-            window_title (str, optional): Window title if available
+            window_title (str, optional): Window title (not used in new implementation)
             
         Returns:
             SongInfo: Song information object
         """
-        # First try direct method from Deezer app - highest priority
-        direct_info = self.get_deezer_direct_info()
-        if direct_info:
-            song_title, artist_name = self.format_deezer_title(direct_info)
-            
-            # Create a cache key for this song
-            current_key = f"{song_title}::{artist_name}"
-            
-            # If it's the same song as last time, use cached info
-            if current_key == self.last_song_key and current_key in self.song_cache:
-                return self.song_cache[current_key]
-            
-            # Otherwise, get info and update last song key
-            self.last_song_key = current_key
-            return self.get_song_via_api(song_title, artist_name)
+        # First check if Deezer is running
+        if not self.check_deezer_is_running():
+            self.logger.debug("Deezer is not running")
+            self.last_song_key = None
+            return SongInfo()
         
-        # If window title has song info, use it
-        if window_title and " - " in window_title:
-            song_title, artist_name = self.format_deezer_title(window_title)
-            
-            # Create a cache key for this song
-            current_key = f"{song_title}::{artist_name}"
-            
-            # If it's the same song as last time, use cached info
-            if current_key == self.last_song_key and current_key in self.song_cache:
-                return self.song_cache[current_key]
-            
-            # Otherwise, get info and update last song key
-            self.last_song_key = current_key
-            return self.get_song_via_api(song_title, artist_name)
+        # Get song info using nowplaying-cli
+        now_playing_data = self.get_now_playing()
         
-        # Then try Control Center as fallback
-        now_playing = self.get_now_playing_from_control_center()
-        if now_playing:
-            song_title, artist_name = self.format_deezer_title(now_playing)
-            
-            # Create a cache key for this song
-            current_key = f"{song_title}::{artist_name}"
-            
-            # If it's the same song as last time, use cached info
-            if current_key == self.last_song_key and current_key in self.song_cache:
-                return self.song_cache[current_key]
-            
-            # Otherwise, get info and update last song key
-            self.last_song_key = current_key
-            return self.get_song_via_api(song_title, artist_name)
+        if not now_playing_data:
+            self.logger.debug("No song information available")
+            self.last_song_key = None
+            return SongInfo()
         
-        # Try window title one more time if it wasn't checked earlier
-        if window_title:
-            song_title, artist_name = self.format_deezer_title(window_title)
-            
-            # Create a cache key for this song
-            current_key = f"{song_title}::{artist_name}"
-            
-            # If it's the same song as last time, use cached info
-            if current_key == self.last_song_key and current_key in self.song_cache:
-                return self.song_cache[current_key]
-            
-            # Otherwise, get info and update last song key
-            self.last_song_key = current_key
-            return self.get_song_via_api(song_title, artist_name)
+        song_title = now_playing_data["title"]
+        artist_name = now_playing_data["artist"]
         
-        # If nothing was found, return default SongInfo
-        print(" ┃ 💤 No song playing detected")
-        self.last_song_key = None
-        return SongInfo() 
+        # Create a cache key for this song
+        current_key = f"{song_title}::{artist_name}"
+        
+        # If it's a new song, get the API data
+        if current_key != self.last_song_key or current_key not in self.song_cache:
+            song_info = self.get_song_via_api(song_title, artist_name)
+            self.last_song_key = current_key
+        else:
+            # Use cached song info
+            song_info = self.song_cache[current_key]
+        
+        # Update with real-time media info (duration, elapsed, playing state)
+        try:
+            song_info.duration = float(now_playing_data["duration"])
+            song_info.elapsed = float(now_playing_data["elapsed"])
+            song_info.playing = now_playing_data["playing"]
+            song_info.album = now_playing_data["album"]
+        except (ValueError, TypeError) as e:
+            self.logger.error(f"Error parsing song duration/elapsed time: {e}")
+        
+        # Log the progress if a song is playing
+        if song_info.is_playing():
+            progress = (song_info.elapsed / song_info.duration * 100) if song_info.duration > 0 else 0
+            status = "▶️ Playing" if song_info.playing else "⏸️ Paused"
+            try:
+                self.logger.debug(f"{status}: {song_info.artist} - {song_info.title} [{song_info.album}]")
+                self.logger.debug(f"Progress: {int(song_info.elapsed)}/{int(song_info.duration)}s ({progress:.1f}%)")
+            except UnicodeEncodeError:
+                # In case of encoding issues, try a safer encoding
+                artist = song_info.artist.encode('utf-8', errors='replace').decode('utf-8')
+                title = song_info.title.encode('utf-8', errors='replace').decode('utf-8')
+                album = song_info.album.encode('utf-8', errors='replace').decode('utf-8') if song_info.album else "Unknown"
+                self.logger.debug(f"{status}: {artist} - {title} [{album}]")
+                self.logger.debug(f"Progress: {int(song_info.elapsed)}/{int(song_info.duration)}s ({progress:.1f}%)")
+        else:
+            self.logger.debug("💤 No song playing detected")
+        
+        return song_info 

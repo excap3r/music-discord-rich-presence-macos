@@ -86,7 +86,14 @@ class DiscordPresenceManager:
             buttons = [{"label": "🎵 Listen on Deezer", "url": song_info.song_link}] if song_info.song_link else None
             
             # Only show essential update information
-            print(f" ┃ 🎵 Now playing: {song_info.title} by {song_info.artist}")
+            try:
+                # Ensure proper Unicode rendering for display
+                title_display = self._ensure_unicode_display(song_info.title)
+                artist_display = self._ensure_unicode_display(song_info.artist)
+                print(f" ┃ 🎵 Now playing: {title_display} by {artist_display}")
+            except UnicodeEncodeError:
+                # Fallback if there's an encoding issue
+                print(f" ┃ 🎵 Now playing: [Song title with special characters] by {song_info.artist}")
             
             update_data = {
                 "details": details,
@@ -166,4 +173,52 @@ class DiscordPresenceManager:
                 self.connected = False
                 print(" ┃ 👋 Disconnected from Discord Rich Presence")
             except Exception as error:
-                self.logger.error(f"Error disconnecting from Discord: {error}") 
+                self.logger.error(f"Error disconnecting from Discord: {error}")
+
+    def _ensure_unicode_display(self, text):
+        """Ensure Unicode display for text"""
+        if text is None:
+            return "Unknown"
+            
+        # Handle different text types
+        if not isinstance(text, str):
+            try:
+                if isinstance(text, bytes):
+                    return text.decode('utf-8')
+                return str(text)
+            except Exception as e:
+                self.logger.error(f"Error converting text type: {e}")
+                return "Unknown"
+        
+        # Process string with escape sequences
+        try:
+            # Check for Unicode escape sequences (raw string matching)
+            if '\\u' in text or '\\U' in text:
+                # Use a more direct approach to handle literal \U and \u sequences
+                import re
+                
+                # Replace Unicode escape sequences with their character equivalents
+                def replace_unicode_escapes(match):
+                    try:
+                        escape_seq = match.group(0)
+                        # Convert to proper Python escape sequence and evaluate
+                        if escape_seq.startswith('\\U'):
+                            code_point = int(escape_seq[2:], 16)
+                            return chr(code_point)
+                        elif escape_seq.startswith('\\u'):
+                            code_point = int(escape_seq[2:], 16)
+                            return chr(code_point)
+                        return escape_seq
+                    except Exception as e:
+                        self.logger.error(f"Failed to decode escape sequence {match.group(0)}: {e}")
+                        return '[?]'
+                
+                # Find and replace all Unicode escape sequences
+                text = re.sub(r'\\U[0-9a-fA-F]{4,8}|\\u[0-9a-fA-F]{4}', replace_unicode_escapes, text)
+            
+            return text
+        except Exception as e:
+            self.logger.error(f"Error processing Unicode text: {e}")
+            # Fallback to simple replacement
+            text = text.replace('\\U', 'U').replace('\\u', 'u')
+            return text 

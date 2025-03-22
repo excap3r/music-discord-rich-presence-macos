@@ -22,6 +22,8 @@ Deezer RPC is a lightweight application that displays your currently playing Dee
 - **Real-time Music Display**: Shows your current Deezer tracks on Discord in real-time
 - **Song Details**: Displays song title, artist name, and album
 - **Time Tracking**: Shows elapsed time and duration of the current track
+- **Progress Tracking**: Accurately tracks song progress percentage
+- **Play State Detection**: Distinguishes between playing and paused states
 - **Automatic Detection**: Seamlessly detects when Deezer is active
 - **Low Resource Usage**: Minimal impact on system performance
 - **Cross-platform**: Works on macOS and Windows
@@ -32,6 +34,7 @@ Deezer RPC is a lightweight application that displays your currently playing Dee
 - Deezer desktop application (installed and running)
 - Discord desktop application (installed and running)
 - Internet connection for Discord Rich Presence updates
+- [nowplaying-cli](https://github.com/kirtan-shah/nowplaying-cli) for macOS users
 
 ## 🚀 Installation
 
@@ -46,6 +49,11 @@ Deezer RPC is a lightweight application that displays your currently playing Dee
 2. Install the required dependencies:
    ```bash
    pip install -r requirements.txt
+   ```
+
+3. For macOS users, install the nowplaying-cli:
+   ```bash
+   npm install -g nowplaying-cli
    ```
 
 ### Virtual Environment (Recommended)
@@ -96,6 +104,11 @@ You can customize Deezer RPC by editing the configuration in `deezer_rpc/utils/c
   - Ensure both Discord and Deezer applications are running
   - Check that Discord's game activity setting is enabled in User Settings > Activity Status
   - Restart Discord if the Rich Presence doesn't appear after a few minutes
+
+- **Song detection not working on macOS:**
+  - Make sure nowplaying-cli is properly installed: `npm install -g nowplaying-cli`
+  - Verify nowplaying-cli works by running `nowplaying-cli get-raw` in terminal
+  - Ensure Media Remote framework permissions are granted for your terminal/application
 
 - **Application crashes:**
   - Check the log file `deezer_rpc.log` for detailed error messages

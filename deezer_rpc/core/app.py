@@ -5,6 +5,7 @@ import os
 import sys
 import signal
 import time
+import codecs
 
 
 class DeezerRPCApp:
@@ -29,6 +30,11 @@ class DeezerRPCApp:
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
+        
+        # Ensure proper terminal encoding for Unicode
+        if sys.stdout.encoding != 'utf-8':
+            sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+            sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
     
     def _signal_handler(self, sig, frame):
         """Handle termination signals gracefully"""
