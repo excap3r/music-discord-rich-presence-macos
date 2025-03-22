@@ -32,8 +32,6 @@ Originally created for Deezer, this app now supports:
 - 🎵 **iTunes**
 - 🎵 **Tidal**
 
-> **Note about Apple Music**: Apple Music is no longer supported as it now has its own native Discord Rich Presence integration.
-
 Want support for another player? Feel free to [open an issue](https://github.com/excap3r/music-discord-rich-presence-macos/issues) to request it.
 
 ---
@@ -197,12 +195,6 @@ To make the app start automatically when you log in:
 ---
 
 ## ❓ Frequently Asked Questions
-
-<details>
-<summary><b>Why doesn't Apple Music work with this app?</b></summary>
-
-Apple Music now has its own native Discord Rich Presence integration.
-</details>
 
 <details>
 <summary><b>How does the app detect what I'm listening to?</b></summary>
