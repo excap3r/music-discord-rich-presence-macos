@@ -1,5 +1,10 @@
 """
-Song information retrieval functionality
+Song information retrieval functionality for Music RPC.
+
+This module provides classes and utilities for retrieving, processing, and
+storing information about songs from various music players and web APIs.
+It handles detection of currently playing songs and enriches the data with
+album art and other metadata.
 """
 import re
 import subprocess
@@ -9,7 +14,11 @@ import sys
 import os
 import time
 import unicodedata
+from typing import Dict, List, Optional, Any, Union, Tuple, Callable
 from urllib.parse import quote
+
+from ..config.settings import Config
+from ..logging.handlers import Logger
 
 # For macOS MediaPlayer import
 try:
@@ -20,10 +29,46 @@ except ImportError:
 
 
 class SongInfo:
-    """Stores information about a song"""
+    """Stores information about a song.
     
-    def __init__(self, title=None, artist=None, album=None, album_cover=None, artist_image=None, 
-                 song_link=None, duration=0, elapsed=0, playing=False, player=None):
+    This class serves as a data container for song information retrieved from
+    music players and web APIs. It includes methods for handling and normalizing
+    text data to ensure proper Unicode encoding.
+    """
+    
+    def __init__(self, 
+                 title: Optional[str] = None, 
+                 artist: Optional[str] = None, 
+                 album: Optional[str] = None, 
+                 album_cover: Optional[str] = None, 
+                 artist_image: Optional[str] = None, 
+                 song_link: Optional[str] = None, 
+                 duration: int = 0, 
+                 elapsed: int = 0, 
+                 playing: bool = False, 
+                 player: Optional[str] = None,
+                 position: Optional[int] = None,
+                 start_time: Optional[int] = None,
+                 end_time: Optional[int] = None,
+                 album_art_url: Optional[str] = None) -> None:
+        """Initialize a new SongInfo instance.
+        
+        Args:
+            title: The title of the song
+            artist: The artist/performer of the song
+            album: The album the song belongs to
+            album_cover: URL to album cover image
+            artist_image: URL to artist image
+            song_link: URL to play the song online
+            duration: Total duration of the song in seconds
+            elapsed: Elapsed time of the song in seconds
+            playing: Whether the song is currently playing
+            player: The name of the music player (e.g., "Deezer", "Music")
+            position: Current playback position in seconds (alternative to elapsed)
+            start_time: Epoch timestamp when the song started playing
+            end_time: Epoch timestamp when the song will end
+            album_art_url: Alternative URL for album art (used by Discord)
+        """
         # Ensure proper Unicode encoding for text fields
         self.title = self._ensure_unicode(title) or "Not playing"
         self.artist = self._ensure_unicode(artist) or "Unknown Artist"
@@ -35,9 +80,23 @@ class SongInfo:
         self.elapsed = elapsed
         self.playing = playing
         self.player = self._ensure_unicode(player)
+        self.position = position or elapsed  # Position is an alternative to elapsed
+        self.start_time = start_time
+        self.end_time = end_time
+        self.album_art_url = album_art_url or album_cover  # Use appropriate field for Discord
     
-    def _ensure_unicode(self, text):
-        """Ensure the text is properly encoded as Unicode"""
+    def _ensure_unicode(self, text: Any) -> Optional[str]:
+        """Ensure the text is properly encoded as Unicode.
+        
+        Handles various text encodings and Unicode escape sequences to ensure
+        consistent text representation.
+        
+        Args:
+            text: The text to process, which can be a string, bytes, or other type
+            
+        Returns:
+            Properly encoded Unicode string or None if input was None
+        """
         if text is None:
             return None
         
@@ -47,7 +106,8 @@ class SongInfo:
                 if isinstance(text, bytes):
                     return text.decode('utf-8', 'replace')
                 return str(text)
-            except Exception:
+            except Exception as e:
+                # Return a simple string representation on error
                 return str(text)
         
         # Handle Unicode escape sequences like \u010C for Č
@@ -56,7 +116,7 @@ class SongInfo:
                 # Replace Unicode escape sequences with actual Unicode characters
                 pattern = r'\\u([0-9a-fA-F]{4})'
                 
-                def replace_unicode(match):
+                def replace_unicode(match: re.Match) -> str:
                     hex_val = match.group(1)
                     return chr(int(hex_val, 16))
                 
@@ -69,7 +129,7 @@ class SongInfo:
             try:
                 pattern = r'\\U([0-9a-fA-F]{8})'
                 
-                def replace_unicode_long(match):
+                def replace_unicode_long(match: re.Match) -> str:
                     hex_val = match.group(1)
                     return chr(int(hex_val, 16))
                 
@@ -85,26 +145,50 @@ class SongInfo:
             
         return text
     
-    def is_playing(self):
-        """Check if a song is actually playing"""
+    def is_playing(self) -> bool:
+        """Check if a song is actually playing.
+        
+        Returns:
+            True if the song is currently playing, False otherwise
+        """
         return self.title != "Not playing" and self.playing
 
 
 class SongInfoRetriever:
-    """Retrieves song information from various sources"""
+    """Retrieves song information from various sources.
     
-    def __init__(self, config, logger):
-        """Initialize with config and logger
+    This class is responsible for detecting currently playing songs from
+    various music players, and enriching the song information with metadata
+    from web APIs such as album art and song links.
+    """
+    
+    def __init__(self, config: Config, logger: Logger) -> None:
+        """Initialize the song information retriever.
         
         Args:
-            config: Config instance with API endpoints
-            logger: Logger instance for logging
+            config: Configuration object with API endpoints and settings
+            logger: Logger instance for logging messages and errors
         """
         self.config = config
         self.logger = logger
         # Cache for song information to avoid duplicate API calls
-        self.song_cache = {}
-        self.last_song_key = None
+        self.song_cache: Dict[str, SongInfo] = {}
+        self.last_song_key: Optional[str] = None
+        
+        # Initialize session for API requests
+        self.session = requests.Session()
+        # Set a reasonable timeout for API requests
+        self.session.request = lambda method, url, **kwargs: requests.Session.request(
+            self.session, method, url, timeout=10, **kwargs
+        )
+        
+        # Set up user agent for API requests
+        self.user_agent = f"MusicRPC/{config.VERSION}"
+        self.default_headers = {
+            "User-Agent": self.user_agent
+        }
+        
+        self.logger.info("SongInfoRetriever initialized")
     
     def _ensure_unicode(self, text):
         """Ensure the text is properly encoded as Unicode"""
@@ -155,23 +239,56 @@ class SongInfoRetriever:
             
         return text
     
-    def check_now_playing(self):
-        """Check if anything is currently playing
+    def check_now_playing(self) -> Optional[SongInfo]:
+        """Check if music is currently playing using system APIs.
         
         Returns:
-            bool: True if music is playing, False otherwise
+            SongInfo object with basic information about the playing song,
+            or None if no song is playing
         """
         try:
-            now_playing = self.get_now_playing()
-            if now_playing and now_playing.get("title") and now_playing.get("title") != "Unknown":
-                return now_playing.get("playing", False)
-            return False
+            # Call the actual info retrieval method
+            song_info = self.get_now_playing()
+            
+            # Make sure we're always returning a SongInfo object or None, never a boolean
+            if isinstance(song_info, bool):
+                if song_info:
+                    # If we just know music is playing but don't have details,
+                    # return a minimal SongInfo object
+                    return SongInfo(
+                        title="Unknown Song",
+                        artist="Unknown Artist",
+                        playing=True,
+                        player="Unknown Player"
+                    )
+                else:
+                    # If no music is playing, return a non-playing SongInfo
+                    return SongInfo(
+                        title=None,
+                        artist=None,
+                        playing=False,
+                        player=None
+                    )
+            
+            # If song_info is already a SongInfo object, return it
+            return song_info
         except Exception as e:
-            self.logger.error(f"Error checking now playing status: {e}")
-            return False
+            self.logger.error(f"Error checking now playing: {e}")
+            # Return a basic SongInfo object with playing=False on error
+            return SongInfo(
+                title=None,
+                artist=None,
+                playing=False,
+                player=None
+            )
     
-    def get_now_playing(self):
-        """Get the currently playing song information using nowplaying-cli"""
+    def get_now_playing(self) -> Optional[SongInfo]:
+        """Get the currently playing song information using nowplaying-cli
+        
+        Returns:
+            SongInfo object with information about the currently playing song,
+            or None if no song is playing
+        """
         try:
             # Run nowplaying-cli get-raw to get all available information
             # Force UTF-8 encoding for both input and output
@@ -193,194 +310,102 @@ class SongInfoRetriever:
             
             self.logger.info(f"Running nowplaying-cli: {nowplaying_cli}")
             
+            # Use the simpler 'get' command to retrieve specific fields
+            # This avoids having to parse complex property list format
             result = subprocess.run(
-                [nowplaying_cli, "get-raw"], 
+                [nowplaying_cli, "get", "title", "artist", "album"], 
                 capture_output=True, 
-                encoding='utf-8',  # Explicitly use UTF-8 encoding for output
-                check=True,
+                text=True,
                 env=env
             )
             
-            # Parse the output into a dictionary
-            info = {}
-            raw_output = result.stdout.strip()
+            if result.returncode != 0:
+                # If command failed, log the error and return a non-playing SongInfo
+                self.logger.error(f"nowplaying-cli failed with exit code {result.returncode}: {result.stderr}")
+                return SongInfo(playing=False, player=None)
             
-            # Check if there's any output
-            if not raw_output:
-                return None
-                
-            # Log the raw output for debugging
-            self.logger.debug(f"Raw nowplaying-cli output: {raw_output}")
-                
-            # Convert the output to a proper Python dictionary
-            # Clean up the output by removing curly braces
-            output_lines = raw_output.strip("{}\n").split("\n")
+            # Process the output - should be simple text with each value on a new line
+            lines = [line.strip() for line in result.stdout.strip().split('\n') if line.strip()]
             
-            for line in output_lines:
-                line = line.strip()
-                if not line or "=" not in line:
-                    continue
+            # Check if we got any output
+            if not lines:
+                self.logger.info("No song playing according to nowplaying-cli")
+                return SongInfo(playing=False, player=None)
+            
+            # Extract the values based on position
+            title = lines[0] if len(lines) > 0 else None
+            artist = lines[1] if len(lines) > 1 else None
+            album = lines[2] if len(lines) > 2 else None
+            
+            # Get additional info for duration and playback state
+            # Check if the player is playing
+            playback_result = subprocess.run(
+                [nowplaying_cli, "get-raw"],
+                capture_output=True,
+                text=True,
+                env=env
+            )
+            
+            # Default values
+            duration = 0
+            position = 0
+            is_playing = False
+            
+            # If we get valid output, try to extract playback info
+            if playback_result.returncode == 0 and playback_result.stdout.strip():
+                raw_output = playback_result.stdout.strip()
+                
+                # Simple check if playback rate is mentioned and positive
+                is_playing = "kMRMediaRemoteNowPlayingInfoPlaybackRate = 1" in raw_output
+                
+                # Try to extract duration and position if available
+                try:
+                    # Look for duration
+                    duration_match = re.search(r'kMRMediaRemoteNowPlayingInfoDuration = (\d+(?:\.\d+)?)', raw_output)
+                    if duration_match:
+                        duration = float(duration_match.group(1))
                     
-                # Split by the first equals sign
-                key, value = line.split("=", 1)
-                
-                # Clean up the key and value
-                key = key.strip()
-                # Handle escaped unicode characters
-                value = value.strip().strip('";')
-                
-                # Directly process Unicode escapes using our helper
-                value = self._ensure_unicode(value)
-                
-                # Add to our info dictionary
-                info[key] = value
+                    # Look for elapsed time
+                    elapsed_match = re.search(r'kMRMediaRemoteNowPlayingInfoElapsedTime = "?(\d+(?:\.\d+)?)"?', raw_output)
+                    if elapsed_match:
+                        position = float(elapsed_match.group(1))
+                except Exception as e:
+                    self.logger.warning(f"Failed to extract duration/position: {e}")
             
-            # Try to detect the player name
-            # This is necessary because nowplaying-cli doesn't always provide client name
-            player_name = info.get("kMRMediaRemoteNowPlayingInfoClientName", None)
+            # If title is still None or empty after all attempts, no song is playing
+            if not title:
+                self.logger.info("No title found, assuming no song is playing")
+                return SongInfo(playing=False, player=None)
             
-            # If client name is not available, try to detect based on different approaches
-            if not player_name:
-                # First try to identify the player from known patterns
-                content_identifier = info.get("kMRMediaRemoteNowPlayingInfoContentItemIdentifier")
-                bundle_identifier = info.get("kMRMediaRemoteNowPlayingInfoBundleIdentifier")
-                
-                self.logger.info(f"Content identifier: {content_identifier}, Bundle identifier: {bundle_identifier}")
-                
-                # Identify player based on bundle/content identifier patterns
-                if bundle_identifier:
-                    if "apple" in bundle_identifier.lower() and "music" in bundle_identifier.lower():
-                        player_name = "Music"
-                    elif "spotify" in bundle_identifier.lower():
-                        player_name = "Spotify"
-                    elif "deezer" in bundle_identifier.lower():
-                        player_name = "Deezer"
-                    elif "vlc" in bundle_identifier.lower():
-                        player_name = "VLC"
-                    elif "itunes" in bundle_identifier.lower():
-                        player_name = "iTunes"
-                    elif "youtube" in bundle_identifier.lower():
-                        player_name = "YouTube"
-                
-                # Try content identifier if bundle identifier didn't work
-                if not player_name and content_identifier:
-                    if "apple" in content_identifier.lower():
-                        player_name = "Music"
-                    elif "spotify" in content_identifier.lower():
-                        player_name = "Spotify"
-                    elif "deezer" in content_identifier.lower():
-                        player_name = "Deezer"
-                
-                # If still no player name, check for Deezer specifically (fastest method)
-                if not player_name:
-                    try:
-                        deezer_check = subprocess.run(
-                            ["pgrep", "-i", "Deezer"],
-                            capture_output=True,
-                            encoding='utf-8',
-                            timeout=0.5
-                        )
-                        if deezer_check.stdout.strip():
-                            self.logger.info("Detected Deezer application running via pgrep (fast method)")
-                            player_name = "Deezer"
-                    except Exception as e:
-                        self.logger.error(f"Error checking for Deezer via pgrep: {e}")
-                
-                # Check for Apple Music
-                if not player_name:
-                    try:
-                        music_check = subprocess.run(
-                            ["pgrep", "-i", "Music"],
-                            capture_output=True,
-                            encoding='utf-8',
-                            timeout=0.5
-                        )
-                        if music_check.stdout.strip():
-                            self.logger.info("Detected Apple Music application running via pgrep")
-                            player_name = "Music"
-                    except Exception as e:
-                        self.logger.error(f"Error checking for Apple Music via pgrep: {e}")
-                
-                # Check for other common players if we still don't have a player name
-                if not player_name:
-                    for app_name in ["Spotify", "iTunes", "VLC", "YouTube"]:
-                        try:
-                            app_check = subprocess.run(
-                                ["pgrep", "-i", app_name],
-                                capture_output=True,
-                                encoding='utf-8',
-                                timeout=0.5
-                            )
-                            if app_check.stdout.strip():
-                                self.logger.info(f"Detected {app_name} application running via pgrep")
-                                player_name = app_name
-                                break
-                        except Exception as e:
-                            self.logger.error(f"Error checking for {app_name} via pgrep: {e}")
-                
-                # Last resort: Try to get source app using nowplaying-cli source command
-                if not player_name:
-                    try:
-                        source_result = subprocess.run(
-                            [nowplaying_cli, "source"], 
-                            capture_output=True,
-                            encoding='utf-8',
-                            timeout=1.0
-                        )
-                        source = source_result.stdout.strip()
-                        self.logger.info(f"Playback source: {source}")
-                        
-                        # Map source to player name
-                        if source:
-                            source_lower = source.lower()
-                            if "music" in source_lower or "apple" in source_lower:
-                                player_name = "Music"
-                            elif "spotify" in source_lower:
-                                player_name = "Spotify"
-                            elif "deezer" in source_lower:
-                                player_name = "Deezer"
-                            elif "itunes" in source_lower:
-                                player_name = "iTunes"
-                            elif "vlc" in source_lower:
-                                player_name = "VLC"
-                            elif "youtube" in source_lower:
-                                player_name = "YouTube"
-                            else:
-                                # Just use the source name if we can't map it
-                                player_name = source
-                    except Exception as e:
-                        self.logger.error(f"Error checking playback source: {e}")
+            # Determine player
+            player = None
             
-            # Extract the relevant information
-            song_info = {
-                "title": info.get("kMRMediaRemoteNowPlayingInfoTitle", "Unknown"),
-                "artist": info.get("kMRMediaRemoteNowPlayingInfoArtist", "Unknown"),
-                "album": info.get("kMRMediaRemoteNowPlayingInfoAlbum", "Unknown"),
-                "duration": info.get("kMRMediaRemoteNowPlayingInfoDuration", "0"),
-                "elapsed": info.get("kMRMediaRemoteNowPlayingInfoElapsedTime", "0"),
-                "playing": True if info.get("kMRMediaRemoteNowPlayingInfoPlaybackRate", "0") != "0" else False,
-                "player": player_name
-            }
+            # Try to identify the player
+            if self._detect_deezer():
+                player = "Deezer"
+            elif artist and "Music" in artist:
+                player = "Apple Music"
+            else:
+                player = self._identify_player()
             
-            # DEBUG: Log the client name detection
-            self.logger.info(f"Player client name: {player_name}")
+            self.logger.info(f"Player client name: {player}")
             
-            # One more pass to ensure all strings are properly encoded
-            for key in ["title", "artist", "album", "player"]:
-                if song_info.get(key):
-                    song_info[key] = self._ensure_unicode(song_info[key])
-                    
-                    # Log the processed values to help with debugging
-                    self.logger.debug(f"Processed {key}: {song_info[key]}")
+            # Create SongInfo object
+            song_info = SongInfo(
+                title=title,
+                artist=artist,
+                album=album,
+                duration=duration,
+                elapsed=position,
+                playing=is_playing if title else False,
+                player=player
+            )
             
             return song_info
             
-        except subprocess.CalledProcessError as e:
-            self.logger.error(f"Error executing nowplaying-cli: {e}")
-            return None
         except Exception as e:
-            self.logger.error(f"Unexpected error getting now playing info: {e}")
-            return None
+            self.logger.error(f"Error getting now playing info: {e}")
+            return SongInfo(playing=False, player=None)
     
     def get_song_via_api(self, song_title, artist_name, player_name=None):
         """Get song details from music API
@@ -448,16 +473,28 @@ class SongInfoRetriever:
             # If we couldn't get details from any API, create basic song info
             if not song_details:
                 now_playing_data = self.get_now_playing()
+                
+                # Get duration and elapsed time from now_playing_data
+                duration = 0
+                elapsed = 0
+                player = player_name
+                
+                # Check if now_playing_data is a SongInfo object
+                if now_playing_data and isinstance(now_playing_data, SongInfo):
+                    duration = now_playing_data.duration or 0
+                    elapsed = now_playing_data.elapsed or 0
+                    player = player_name or now_playing_data.player
+                
                 song_details = {
                     "title": song_title,
                     "artist": artist_name,
                     "album_cover": "music_logo",
                     "artist_image": "music_icon",
                     "song_link": None,
-                    "duration": float(now_playing_data.get("duration", 0)) if now_playing_data else 0,
-                    "elapsed": float(now_playing_data.get("elapsed", 0)) if now_playing_data else 0,
+                    "duration": float(duration),
+                    "elapsed": float(elapsed),
                     "playing": True,
-                    "player": player_name or (now_playing_data.get("player") if now_playing_data else None)
+                    "player": player
                 }
             
             # Create song info object with now playing data
@@ -587,16 +624,27 @@ class SongInfoRetriever:
                     except Exception as e:
                         self.logger.error(f"Error checking artist image URL: {e}")
                 
+                # Get duration and elapsed time from now_playing_data
+                duration = 0
+                elapsed = 0
+                player = player_name
+                
+                # Check if now_playing_data is a SongInfo object
+                if now_playing_data and isinstance(now_playing_data, SongInfo):
+                    duration = now_playing_data.duration or 0
+                    elapsed = now_playing_data.elapsed or 0
+                    player = player_name or now_playing_data.player
+                
                 return {
                     "title": api_title,
                     "artist": api_artist,
                     "album_cover": album_cover or "music_logo",
                     "artist_image": artist_image or "music_icon",
                     "song_link": song["link"],
-                    "duration": float(now_playing_data.get("duration", 0)) if now_playing_data else 0,
-                    "elapsed": float(now_playing_data.get("elapsed", 0)) if now_playing_data else 0,
+                    "duration": float(duration),
+                    "elapsed": float(elapsed),
                     "playing": True,
-                    "player": player_name or (now_playing_data.get("player") if now_playing_data else None)
+                    "player": player
                 }
             
             # If no results found
@@ -889,6 +937,17 @@ class SongInfoRetriever:
                 if cover_response.status_code == 200:
                     self.logger.debug(f"Found album cover from artist ID search with score {highest_score}: {album_cover_url}")
                     
+                    # Get duration and elapsed time from now_playing_data
+                    duration = 0
+                    elapsed = 0
+                    player = player_name
+                    
+                    # Check if now_playing_data is a SongInfo object
+                    if now_playing_data and isinstance(now_playing_data, SongInfo):
+                        duration = now_playing_data.duration or 0
+                        elapsed = now_playing_data.elapsed or 0
+                        player = player_name or now_playing_data.player
+                    
                     # Return song details with found album art
                     return {
                         "title": song_title,  # Keep original title
@@ -896,10 +955,10 @@ class SongInfoRetriever:
                         "album_cover": album_cover_url,
                         "artist_image": "music_icon",
                         "song_link": best_match.get("link", ""),
-                        "duration": float(now_playing_data.get("duration", 0)) if now_playing_data else 0,
-                        "elapsed": float(now_playing_data.get("elapsed", 0)) if now_playing_data else 0,
+                        "duration": float(duration),
+                        "elapsed": float(elapsed),
                         "playing": True,
-                        "player": player_name or (now_playing_data.get("player") if now_playing_data else None)
+                        "player": player
                     }
             
             return None
@@ -970,6 +1029,17 @@ class SongInfoRetriever:
                     except Exception as e:
                         self.logger.error(f"Error checking album cover URL: {e}")
                         
+                # Get duration and elapsed time from now_playing_data
+                duration = 0
+                elapsed = 0
+                player = player_name
+                
+                # Check if now_playing_data is a SongInfo object
+                if now_playing_data and isinstance(now_playing_data, SongInfo):
+                    duration = now_playing_data.duration or 0
+                    elapsed = now_playing_data.elapsed or 0
+                    player = player_name or now_playing_data.player
+                
                 # Keep original title and artist but use the found album art
                 if album_cover:  # Only return if we actually found an album cover
                     return {
@@ -978,10 +1048,10 @@ class SongInfoRetriever:
                         "album_cover": album_cover,
                         "artist_image": "music_icon",
                         "song_link": song.get("link", ""),
-                        "duration": float(now_playing_data.get("duration", 0)) if now_playing_data else 0,
-                        "elapsed": float(now_playing_data.get("elapsed", 0)) if now_playing_data else 0,
+                        "duration": float(duration),
+                        "elapsed": float(elapsed),
                         "playing": True,
-                        "player": player_name or (now_playing_data.get("player") if now_playing_data else None)
+                        "player": player
                     }
             
             # If no results with album art found
@@ -991,90 +1061,130 @@ class SongInfoRetriever:
             self.logger.error(f"Error in {description} search: {e}")
             return None
     
-    def get_current_song_info(self, window_title=None):
-        """Get current song information from window title or system media
+    def get_current_song_info(self, window_title: Optional[str] = None) -> Optional[SongInfo]:
+        """Get information about the currently playing song.
+        
+        This is the main method for retrieving song information. It first attempts
+        to detect the currently playing song using various methods, and then enriches
+        the information with metadata from web APIs.
         
         Args:
-            window_title (str, optional): Window title to parse for song info
+            window_title: Title of the music player window (optional)
             
         Returns:
-            SongInfo: Song information object
+            SongInfo object with details about the currently playing song,
+            or None if no song is playing or an error occurred
         """
-        # Try to get information from nowplaying-cli first (most reliable)
-        now_playing = self.get_now_playing()
+        try:
+            self.logger.debug(f"Getting song info from window: {window_title}")
+            
+            # Try to get song info from the MediaPlayer API first (macOS)
+            song_info = self.check_now_playing()
+            
+            # Make sure song_info is a SongInfo object and check if it's playing
+            if song_info and isinstance(song_info, SongInfo) and song_info.is_playing():
+                # Generate a cache key based on title, artist, and player
+                cache_key = f"{song_info.title}|{song_info.artist}|{song_info.player}"
+                
+                # Check if we've already processed this song
+                if cache_key in self.song_cache:
+                    # Update the elapsed time for the cached song
+                    cached_song = self.song_cache[cache_key]
+                    cached_song.elapsed = song_info.elapsed
+                    cached_song.playing = song_info.playing
+                    
+                    # Log that we're using cached data
+                    self.logger.debug(f"Using cached song info for {song_info.title}")
+                    
+                    # Update the last song key reference
+                    self.last_song_key = cache_key
+                    
+                    return cached_song
+                
+                # If we haven't processed this song before, try to get additional info
+                try:
+                    # Enhance with metadata from APIs
+                    enhanced_info = self.get_song_via_api(
+                        song_info.title, 
+                        song_info.artist,
+                        song_info.player
+                    )
+                    
+                    if enhanced_info:
+                        # Preserve the original player name and playback status
+                        enhanced_info.player = song_info.player
+                        enhanced_info.playing = song_info.playing
+                        enhanced_info.elapsed = song_info.elapsed
+                        enhanced_info.duration = song_info.duration or enhanced_info.duration
+                        
+                        # Store in cache
+                        self.song_cache[cache_key] = enhanced_info
+                        self.last_song_key = cache_key
+                        
+                        self.logger.info(f"Enhanced song info for {enhanced_info.title} by {enhanced_info.artist}")
+                        return enhanced_info
+                except Exception as e:
+                    # Log the error but continue with the basic song info
+                    self.logger.error(f"Error enhancing song info: {e}")
+                
+                # If enhancement failed, use the basic info
+                self.song_cache[cache_key] = song_info
+                self.last_song_key = cache_key
+                return song_info
+            
+            # If no song is playing, return the basic song info
+            return song_info
+            
+        except Exception as e:
+            self.logger.error(f"Error getting current song info: {e}")
+            
+            # Return a default SongInfo object for a graceful fallback
+            return SongInfo(
+                title=None, 
+                artist=None, 
+                playing=False, 
+                player="Unknown"
+            )
+    
+    def _detect_deezer(self) -> bool:
+        """Detect if Deezer is running.
         
-        if now_playing and now_playing.get("title") and now_playing.get("title") != "Unknown":
-            # We have song info from nowplaying-cli
-            title = now_playing.get("title")
-            artist = now_playing.get("artist", "Unknown Artist")
-            player = now_playing.get("player")
-            
-            # Create a cache key
-            cache_key = f"{title}::{artist}"
-            
-            # Check if song is the same as the last one we processed (for caching)
-            if cache_key == self.last_song_key and cache_key in self.song_cache:
-                # Update just the elapsed time and player info
-                cached_song = self.song_cache[cache_key]
-                cached_song.elapsed = float(now_playing.get("elapsed", 0))
-                cached_song.playing = now_playing.get("playing", True)
-                # Update player name if it's available now
-                if player and not cached_song.player:
-                    cached_song.player = player
-                return cached_song
-            
-            # Remember this song for later
-            self.last_song_key = cache_key
-            
-            # Get enriched song information from API
-            return self.get_song_via_api(title, artist, player)
+        Returns:
+            bool: True if Deezer is running, False otherwise
+        """
+        try:
+            deezer_check = subprocess.run(
+                ["pgrep", "-i", "Deezer"],
+                capture_output=True,
+                text=True,
+                timeout=0.5
+            )
+            return bool(deezer_check.stdout.strip())
+        except Exception as e:
+            self.logger.error(f"Error checking for Deezer via pgrep: {e}")
+            return False
+    
+    def _identify_player(self) -> Optional[str]:
+        """Identify which music player is currently running.
         
-        # Fallback: try to parse the window title if available
-        elif window_title:
-            # Different music players format their window titles differently
-            player_name = None
-            
-            # Try to extract app name from window title first
-            known_apps = ["Music", "Spotify", "Deezer", "iTunes", "VLC", "YouTube"]
-            for app in known_apps:
-                if app.lower() in window_title.lower():
-                    player_name = app
-                    break
-            
-            # Most common format: "Song Title - Artist Name"
-            if " - " in window_title:
-                parts = window_title.split(" - ", 1)
-                title = parts[0].strip()
-                artist = parts[1].strip() if len(parts) > 1 else "Unknown Artist"
-                
-                # Get enriched song information from API
-                return self.get_song_via_api(title, artist, player_name)
-            
-            # Format: "Song Title by Artist Name"
-            elif " by " in window_title:
-                parts = window_title.split(" by ", 1)
-                title = parts[0].strip()
-                artist = parts[1].strip() if len(parts) > 1 else "Unknown Artist"
-                
-                # Get enriched song information from API
-                return self.get_song_via_api(title, artist, player_name)
-            
-            # If no recognizable format, just use the window title as the song title
-            else:
-                title = window_title
-                
-                # Create a basic song info object
-                return SongInfo(
-                    title=title,
-                    artist="Unknown Artist",
-                    playing=False,  # We can't determine if it's playing from just the title
-                    player=player_name
+        Returns:
+            str: Name of the detected player, or None if no player is detected
+        """
+        # Check common music players
+        players = ["Spotify", "Music", "iTunes", "VLC", "YouTube", "Tidal"]
+        
+        for app_name in players:
+            try:
+                app_check = subprocess.run(
+                    ["pgrep", "-i", app_name],
+                    capture_output=True,
+                    text=True,
+                    timeout=0.5
                 )
+                if app_check.stdout.strip():
+                    self.logger.info(f"Detected {app_name} application running via pgrep")
+                    return app_name
+            except Exception as e:
+                self.logger.error(f"Error checking for {app_name} via pgrep: {e}")
         
-        # If all else fails, return a not playing status
-        return SongInfo(
-            title="Not playing",
-            artist="Open a music player and play a song",
-            playing=False,
-            player=None
-        ) 
+        return None 

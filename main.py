@@ -3,12 +3,13 @@
 """
 Music RPC - Discord Rich Presence for Music Players
 
-This script displays your currently playing music on Discord
-using Rich Presence.
+This script is the main entry point for the application when run directly.
+It handles environment setup, initialization, and launches the application.
 
 Author: Jakub Sladek
 Version: 2.0.0
 """
+from typing import Optional, Any, Dict, Union, TextIO
 import os
 import sys
 import io
@@ -58,7 +59,13 @@ else:
 
 # Setup logging
 LOG_FILE = os.path.expanduser("~/Music_RPC.log")
-def log(message):
+
+def log(message: str) -> None:
+    """Log a message to both console and log file.
+    
+    Args:
+        message: The message to log
+    """
     try:
         print(message)
         with open(LOG_FILE, "a", encoding="utf-8") as f:
@@ -109,12 +116,12 @@ except Exception as e:
 # Import application modules
 try:
     log("Importing modules...")
-    from deezer_rpc.core.app import DeezerRPCApp
-    from deezer_rpc.config.settings import Config
-    from deezer_rpc.logging.handlers import Logger
-    from deezer_rpc.core.window_manager import WindowManager
-    from deezer_rpc.core.song_info import SongInfoRetriever
-    from deezer_rpc.core.discord_presence import DiscordPresenceManager
+    from music_rpc.core.app import MusicRPCApp
+    from music_rpc.config.settings import Config
+    from music_rpc.logging.handlers import Logger
+    from music_rpc.core.window_manager import WindowManager
+    from music_rpc.core.song_info import SongInfoRetriever
+    from music_rpc.core.discord_presence import DiscordPresenceManager
     log("Modules imported successfully")
 except Exception as e:
     log(f"Error importing modules: {str(e)}")
@@ -144,7 +151,7 @@ try:
     log("Discord manager initialized")
     
     # Create the application
-    app = DeezerRPCApp(
+    app = MusicRPCApp(
         config=config,
         logger=logger,
         window_manager=window_manager,

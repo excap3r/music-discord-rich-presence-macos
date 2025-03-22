@@ -28,7 +28,7 @@ setup(
     install_requires=requirements,
     entry_points={
         "console_scripts": [
-            "music-rpc=deezer_rpc.main:main",
+            "music-rpc=music_rpc.main:main",
         ],
     },
     include_package_data=True,
