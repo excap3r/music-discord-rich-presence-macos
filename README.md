@@ -120,7 +120,7 @@ Required to detect music players and read window titles
 If you're installing from source or building your own app, you'll need to install nowplaying-cli:
 
 ```bash
-brew install kirtan-shah/tap/nowplaying-cli
+brew install nowplaying-cli
 ```
 
 This CLI tool is required for retrieving currently playing song information from macOS players.
