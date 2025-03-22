@@ -45,7 +45,7 @@ class Config:
     
     # Log configuration
     LOG_FILE: str = os.path.expanduser("~/music_rpc.log")
-    LOG_LEVEL: str = "INFO"  # Can be DEBUG, INFO, WARNING, ERROR, CRITICAL
+    LOG_LEVEL: str = "WARNING"  # Can be DEBUG, INFO, WARNING, ERROR, CRITICAL
     MAX_LOG_SIZE: int = 5 * 1024 * 1024  # 5MB
     LOG_BACKUP_COUNT: int = 3
     

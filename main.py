@@ -17,6 +17,7 @@ import locale
 import codecs
 import traceback
 import platform
+import argparse
 
 # Set environment variables for encoding
 os.environ['PYTHONIOENCODING'] = 'utf-8'
@@ -57,45 +58,72 @@ else:
     # Running as script
     BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 
+# Add the project root to the Python path
+sys.path.insert(0, BASE_PATH)
+
 # Setup logging
 LOG_FILE = os.path.expanduser("~/Music_RPC.log")
 
-def log(message: str) -> None:
-    """Log a message to both console and log file.
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='Music RPC - Discord Rich Presence for Music Players')
+parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging (INFO level)')
+parser.add_argument('--debug', '-d', action='store_true', help='Enable debug logging (DEBUG level)')
+parser.add_argument('--config', type=str, help='Path to custom config file')
+parser.add_argument('--disable-discord', action='store_true', help='Run without Discord integration')
+parser.add_argument('--interval', type=int, help='Set update interval in seconds')
+args = parser.parse_args()
+
+# Helper function for quiet logging during startup
+def quiet_log(message: str) -> None:
+    """Log a message to the log file only, not to console.
     
     Args:
         message: The message to log
     """
     try:
-        print(message)
         with open(LOG_FILE, "a", encoding="utf-8") as f:
             f.write(message + "\n")
     except:
         # Fallback in case of encoding errors
         pass
 
-log(f"Music RPC starting at {os.getcwd()}")
-log(f"Python version: {sys.version}")
-log(f"Platform: {sys.platform}")
-log(f"Base path: {BASE_PATH}")
-log(f"System path: {sys.path}")
-log(f"Environment PATH: {os.environ.get('PATH', 'Not set')}")
+# Standard logging function with console output
+def log(message: str, console: bool = True) -> None:
+    """Log a message to both console and log file.
+    
+    Args:
+        message: The message to log
+        console: Whether to also print to console
+    """
+    try:
+        if console:
+            print(message)
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(message + "\n")
+    except:
+        # Fallback in case of encoding errors
+        pass
+
+# Log startup info to file but not console by default
+quiet_log(f"Music RPC starting at {os.getcwd()}")
+quiet_log(f"Python version: {sys.version}")
+quiet_log(f"Platform: {sys.platform}")
+quiet_log(f"Base path: {BASE_PATH}")
+quiet_log(f"System path: {sys.path}")
+quiet_log(f"Environment PATH: {os.environ.get('PATH', 'Not set')}")
 
 try:
     # Set locale for proper encoding
-    log("Setting locale...")
+    quiet_log("Setting locale...")
     locale.setlocale(locale.LC_ALL, '')
-    log(f"Locale set to: {locale.getlocale()}")
+    quiet_log(f"Locale set to: {locale.getlocale()}")
     
     # Log current encoding settings
-    log(f"File system encoding: {sys.getfilesystemencoding()}")
-    log(f"Default encoding: {sys.getdefaultencoding()}")
-    log(f"Stdout encoding: {sys.stdout.encoding}")
+    quiet_log(f"File system encoding: {sys.getfilesystemencoding()}")
+    quiet_log(f"Default encoding: {sys.getdefaultencoding()}")
+    quiet_log(f"Stdout encoding: {sys.stdout.encoding}")
 except Exception as e:
     log(f"Error setting locale: {str(e)}")
-
-# Add the project root to the Python path
-sys.path.insert(0, BASE_PATH)
 
 # Check if nowplaying-cli is available
 try:
@@ -103,26 +131,26 @@ try:
     result = subprocess.run(['which', 'nowplaying-cli'], 
                            capture_output=True, 
                            text=True)
-    log(f"nowplaying-cli location: {result.stdout.strip() if result.returncode == 0 else 'Not found'}")
+    quiet_log(f"nowplaying-cli location: {result.stdout.strip() if result.returncode == 0 else 'Not found'}")
     
     # Check for a local binary too
     bin_path = os.path.join(BASE_PATH, 'bin', 'nowplaying-cli')
     if os.path.exists(bin_path):
-        log(f"Found local nowplaying-cli at: {bin_path}")
+        quiet_log(f"Found local nowplaying-cli at: {bin_path}")
         os.chmod(bin_path, 0o755)  # Ensure it's executable
 except Exception as e:
     log(f"Error checking nowplaying-cli: {str(e)}")
 
 # Import application modules
 try:
-    log("Importing modules...")
+    quiet_log("Importing modules...")
     from music_rpc.core.app import MusicRPCApp
     from music_rpc.config.settings import Config
     from music_rpc.logging.handlers import Logger
     from music_rpc.core.window_manager import WindowManager
     from music_rpc.core.song_info import SongInfoRetriever
     from music_rpc.core.discord_presence import DiscordPresenceManager
-    log("Modules imported successfully")
+    quiet_log("Modules imported successfully")
 except Exception as e:
     log(f"Error importing modules: {str(e)}")
     log(traceback.format_exc())
@@ -130,25 +158,42 @@ except Exception as e:
 
 # Start the application
 try:
-    log("Starting application...")
+    quiet_log("Starting application...")
     
     # Initialize configuration
     config = Config()
-    log("Config initialized")
+    if args.config:
+        config.CONFIG_FILE = args.config
+        config.load_config()
+    
+    # Set log level based on command line arguments
+    if args.debug:
+        config.LOG_LEVEL = "DEBUG"
+    elif args.verbose:
+        config.LOG_LEVEL = "INFO"
+    
+    quiet_log(f"Log level: {config.LOG_LEVEL}")
+    
+    # Update interval from command line if provided
+    if args.interval:
+        success, message = config.set_update_interval(args.interval)
+        quiet_log(f"Setting interval from command line: {message}")
     
     # Initialize logger
     logger = Logger(config)
-    log("Logger initialized")
+    
+    # Now that the logger is configured, display a startup message
+    logger.info("Music RPC v{} starting".format(config.VERSION))
     
     # Initialize core components with dependency injection
     window_manager = WindowManager(logger)
-    log("Window manager initialized")
     
     song_info_retriever = SongInfoRetriever(config, logger)
-    log("Song info retriever initialized")
     
     discord_manager = DiscordPresenceManager(config, logger)
-    log("Discord manager initialized")
+    if args.disable_discord:
+        logger.warning("Discord integration disabled via command line")
+        discord_manager.enabled = False
     
     # Create the application
     app = MusicRPCApp(
@@ -158,12 +203,11 @@ try:
         song_info_retriever=song_info_retriever,
         discord_manager=discord_manager
     )
-    log("Application instance created")
     
     # Start the application
-    log("Starting application...")
+    logger.info("Starting application...")
     app.startup()
-    log("Application started")
+    logger.info("Application started successfully")
 except Exception as e:
     log(f"Error starting application: {str(e)}")
     log(traceback.format_exc())
