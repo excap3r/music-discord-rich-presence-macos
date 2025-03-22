@@ -169,16 +169,15 @@ The app stores its configuration in:
 | Setting | Description | Default | Possible Values |
 |---------|-------------|---------|----------------|
 | `update_interval` | How often to check for song changes (in seconds) | `10` | `5`, `10`, `30` |
-| `enabled_players` | List of enabled music players | All available | List of player names |
-| `debug_mode` | Enable verbose logging for troubleshooting | `false` | `true`, `false` |
 
 ### 💬 Discord Settings
 
-| Setting | Description | Default | Possible Values |
-|---------|-------------|---------|----------------|
-| `discord_enabled` | Whether to enable Discord Rich Presence | `true` | `true`, `false` |
-| `show_elapsed_time` | Show elapsed time in Discord status | `true` | `true`, `false` |
-| `show_player_name` | Show music player name in Discord status | `true` | `true`, `false` |
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `USE_ALBUM_ART` | Whether to show album art in Discord status | `true` |
+| `DISABLED_PLAYERS` | List of players that have Discord integration disabled | `["Music"]` |
+
+*Note: You can also disable Discord integration via command line with the `--disable-discord` flag.*
 
 ---
 
