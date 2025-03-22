@@ -9,162 +9,29 @@ import shutil
 import time
 import platform
 
-
-def cleanup():
-    """Clean up build artifacts from previous builds"""
-    print("Cleaning up previous build artifacts...")
-    dirs_to_clean = ['build', 'dist']
-    for dir_name in dirs_to_clean:
-        if os.path.exists(dir_name):
-            shutil.rmtree(dir_name)
-    
-    # Also clean up any leftover .spec files
-    spec_files = [f for f in os.listdir('.') if f.endswith('.spec')]
-    for spec_file in spec_files:
-        os.unlink(spec_file)
+# Import shared build utilities
+from build_utils import (
+    cleanup, 
+    ensure_project_root, 
+    create_icns, 
+    create_info_plist,
+    find_nowplaying_cli,
+    ensure_nowplaying_cli,
+    create_dmg
+)
 
 
-def create_icns():
-    """Create an .icns file from the PNG image for macOS app icon"""
-    print("Creating macOS icon file...")
-    
-    # Rename the icon file
-    if os.path.exists('deezer_rpc.png') and not os.path.exists('music_rpc.png'):
-        shutil.copy('deezer_rpc.png', 'music_rpc.png')
-    
-    if os.path.exists('deezer_rpc.ico') and not os.path.exists('music_rpc.ico'):
-        shutil.copy('deezer_rpc.ico', 'music_rpc.ico')
-    
-    # Create a temporary iconset directory
-    iconset_dir = 'Music_RPC.iconset'
-    if not os.path.exists(iconset_dir):
-        os.makedirs(iconset_dir)
-    
-    # Generate different icon sizes
-    icon_sizes = [16, 32, 64, 128, 256, 512, 1024]
-    for size in icon_sizes:
-        # Convert the PNG image to different sizes
-        subprocess.run([
-            'sips',
-            '-z', str(size), str(size),
-            'music_rpc.png',
-            '--out', f'{iconset_dir}/icon_{size}x{size}.png'
-        ])
-        
-        # Create 2x versions for Retina displays
-        if size <= 512:
-            double_size = size * 2
-            subprocess.run([
-                'sips',
-                '-z', str(size), str(size),
-                'music_rpc.png',
-                '--out', f'{iconset_dir}/icon_{size}x{size}@2x.png'
-            ])
-    
-    # Use iconutil to create the icns file
-    subprocess.run(['iconutil', '-c', 'icns', iconset_dir])
-    
-    # Clean up the iconset directory
-    shutil.rmtree(iconset_dir)
-
-
-def create_info_plist():
-    """Create a custom Info.plist file for the application"""
-    print("Creating Info.plist file...")
-    
-    info_plist_content = """<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>English</string>
-    <key>CFBundleDisplayName</key>
-    <string>Music RPC</string>
-    <key>CFBundleExecutable</key>
-    <string>Music RPC</string>
-    <key>CFBundleIconFile</key>
-    <string>Music_RPC.icns</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.jakubsladek.musicrpc</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>Music RPC</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>2.0.0</string>
-    <key>CFBundleVersion</key>
-    <string>2.0.0</string>
-    <key>LSHasLocalizedDisplayName</key>
-    <false/>
-    <key>LSMinimumSystemVersion</key>
-    <string>10.13</string>
-    <key>LSUIElement</key>
-    <true/>
-    <key>NSAppleScriptEnabled</key>
-    <true/>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-    <key>NSHumanReadableCopyright</key>
-    <string>Copyright © 2023 Jakub Sladek. All rights reserved.</string>
-    <key>NSPrincipalClass</key>
-    <string>NSApplication</string>
-    <key>NSRequiresAquaSystemAppearance</key>
-    <false/>
-</dict>
-</plist>
-"""
-    
-    with open('Info.plist', 'w', encoding='utf-8') as f:
-        f.write(info_plist_content)
-    
-    return os.path.abspath('Info.plist')
-
-
-def find_nowplaying_cli():
-    """Find the nowplaying-cli executable in the system"""
-    try:
-        result = subprocess.run(['which', 'nowplaying-cli'], 
-                               capture_output=True, 
-                               text=True, 
-                               check=True)
-        return result.stdout.strip()
-    except Exception:
-        common_paths = [
-            '/opt/homebrew/bin/nowplaying-cli',
-            '/usr/local/bin/nowplaying-cli',
-            '/usr/bin/nowplaying-cli'
-        ]
-        for path in common_paths:
-            if os.path.exists(path):
-                return path
-    return None
-
-
-def ensure_nowplaying_cli():
-    """Ensure nowplaying-cli is installed and return its path"""
-    nowplaying_cli_path = find_nowplaying_cli()
-    
-    if not nowplaying_cli_path:
-        print("nowplaying-cli not found. Attempting to install with Homebrew...")
-        try:
-            subprocess.run(['brew', 'install', 'nowplaying-cli'], check=True)
-            nowplaying_cli_path = find_nowplaying_cli()
-        except Exception as e:
-            print(f"Error installing nowplaying-cli: {e}")
-    
-    if not nowplaying_cli_path:
-        print("ERROR: nowplaying-cli is required but could not be found or installed.")
-        print("Please install it manually with: brew install nowplaying-cli")
-        return None
-    
-    return nowplaying_cli_path
-
-
-def build_app():
+def build_app_pyinstaller():
     """Build the macOS application using PyInstaller"""
     print("Building macOS application with PyInstaller...")
+    
+    # Ensure we're working from the project root directory
+    project_root = ensure_project_root()
+    
+    # Verify main.py exists in the current directory
+    if not os.path.exists('main.py'):
+        print(f"ERROR: main.py not found in {os.getcwd()}")
+        return False
     
     # Create the Info.plist file
     plist_path = create_info_plist()
@@ -187,42 +54,83 @@ def build_app():
     shutil.copy(nowplaying_cli_path, local_nowplaying_cli)
     os.chmod(local_nowplaying_cli, 0o755)  # Make executable
     
+    # Make sure we have an icon file
+    icon_path = "Music_RPC.icns"
+    assets_dir = os.path.join(project_root, 'assets')
+    
+    # Check icon files in various locations
+    if not os.path.exists(icon_path):
+        if os.path.exists(os.path.join(assets_dir, 'music_rpc.icns')):
+            shutil.copy(os.path.join(assets_dir, 'music_rpc.icns'), icon_path)
+            print(f"Copied icon from {os.path.join(assets_dir, 'music_rpc.icns')}")
+    
+    # Prepare data files to include
+    data_files = []
+    
+    # Check for PNG icon in various locations
+    png_icon = None
+    if os.path.exists('music_rpc.png'):
+        png_icon = 'music_rpc.png'
+    elif os.path.exists(os.path.join(assets_dir, 'music_rpc.png')):
+        shutil.copy(os.path.join(assets_dir, 'music_rpc.png'), 'music_rpc.png')
+        png_icon = 'music_rpc.png'
+    
+    if png_icon:
+        data_files.append(f"--add-data={png_icon}:.")
+        print(f"Adding data file: {png_icon}")
+    
+    # Add the ICNS file if it exists
+    if os.path.exists(icon_path):
+        data_files.append(f"--add-data={icon_path}:.")
+        print(f"Adding data file: {icon_path}")
+    
     # Build the app with PyInstaller
-    result = subprocess.run(
-        [
-            "pyinstaller",
-            "--clean",
-            "--windowed",
-            "--name=Music RPC",
-            f"--icon=Music_RPC.icns",
-            "--add-data=music_rpc.png:.",
-            "--add-data=Music_RPC.icns:.",
-            f"--add-binary={local_nowplaying_cli}:bin",
-            "--hidden-import=rumps",
-            "--hidden-import=Quartz",
-            "--hidden-import=Cocoa",
-            "--hidden-import=Foundation",
-            "--hidden-import=AppKit",
-            "--hidden-import=PyObjCTools",
-            "--hidden-import=MediaPlayer",
-            "--hidden-import=pypresence",
-            "--hidden-import=requests",
-            "--hidden-import=locale",
-            "--hidden-import=io",
-            "--hidden-import=codecs",
-            "--hidden-import=re",
-            "--hidden-import=subprocess",
-            "--hidden-import=json",
-            "--hidden-import=queue",
-            "--hidden-import=threading",
-            "--hidden-import=unicodedata",
-            "--recursive-copy-metadata=pypresence",
-            "--collect-submodules=deezer_rpc",
-            "--osx-bundle-identifier=com.jakubsladek.musicrpc",
-        ] + 
-        ["main.py"],
-        check=False,
-    )
+    pyinstaller_cmd = [
+        "pyinstaller",
+        "--clean",
+        "--windowed",
+        "--name=Music RPC"
+    ]
+    
+    # Add icon if it exists
+    if os.path.exists(icon_path):
+        pyinstaller_cmd.append(f"--icon={icon_path}")
+        print(f"Using icon: {icon_path}")
+    
+    # Add data files
+    pyinstaller_cmd.extend(data_files)
+    
+    # Add other PyInstaller options
+    pyinstaller_cmd.extend([
+        f"--add-binary={local_nowplaying_cli}:bin",
+        "--hidden-import=rumps",
+        "--hidden-import=Quartz",
+        "--hidden-import=Cocoa",
+        "--hidden-import=Foundation",
+        "--hidden-import=AppKit",
+        "--hidden-import=PyObjCTools",
+        "--hidden-import=MediaPlayer",
+        "--hidden-import=pypresence",
+        "--hidden-import=requests",
+        "--hidden-import=locale",
+        "--hidden-import=io",
+        "--hidden-import=codecs",
+        "--hidden-import=re",
+        "--hidden-import=subprocess",
+        "--hidden-import=json",
+        "--hidden-import=queue",
+        "--hidden-import=threading",
+        "--hidden-import=unicodedata",
+        "--recursive-copy-metadata=pypresence",
+        "--collect-submodules=music_rpc",  # Updated from deezer_rpc to music_rpc
+        "--osx-bundle-identifier=com.jakubsladek.musicrpc",
+        "main.py"  # Main script path
+    ])
+    
+    # Run PyInstaller
+    print("Running PyInstaller command:")
+    print(" ".join(pyinstaller_cmd))
+    result = subprocess.run(pyinstaller_cmd, check=False)
     
     if result.returncode != 0:
         print("Failed to build app.")
@@ -335,65 +243,10 @@ fi
     return True
 
 
-def create_dmg():
-    """Create a DMG installer for the app"""
-    print("Creating DMG installer...")
-    
-    # Path to the app
-    app_path = os.path.abspath("dist/Music RPC.app")
-    
-    # Check if app exists
-    if not os.path.exists(app_path):
-        print("App not found at:", app_path)
-        return False
-    
-    # Use explicit DMG name 
-    dmg_name = "Music-RPC-Installer.dmg"
-    
-    try:
-        # Check if create-dmg is installed
-        subprocess.run(['which', 'create-dmg'], check=True, capture_output=True)
-    except subprocess.CalledProcessError:
-        print("create-dmg not found. Installing via Homebrew...")
-        subprocess.run(['brew', 'install', 'create-dmg'], check=True)
-    
-    # Prepare a temporary directory for DMG creation
-    tmp_dir = os.path.abspath("dist/tmp_dmg")
-    os.makedirs(tmp_dir, exist_ok=True)
-    
-    # Copy the app to the temporary directory
-    shutil.copytree(app_path, os.path.join(tmp_dir, "Music RPC.app"), symlinks=True)
-    
-    # Create the DMG
-    dmg_cmd = [
-        'create-dmg',
-        '--volname', 'Music RPC',
-        '--volicon', 'Music_RPC.icns',
-        '--window-pos', '200', '120',
-        '--window-size', '800', '400',
-        '--icon-size', '100',
-        '--icon', 'Music RPC.app', '200', '200',
-        '--app-drop-link', '600', '200',
-        '--no-internet-enable',
-        os.path.join('dist', dmg_name),
-        tmp_dir
-    ]
-    
-    result = subprocess.run(dmg_cmd)
-    
-    # Clean up the temporary directory
-    shutil.rmtree(tmp_dir, ignore_errors=True)
-    
-    if result.returncode == 0:
-        print(f"DMG installer created successfully: dist/{dmg_name}")
-        return True
-    else:
-        print("Failed to create DMG installer.")
-        return False
-
-
 def main():
     """Main build script function"""
+    print("Starting PyInstaller macOS build...")
+    
     # Clean up previous builds
     cleanup()
     
@@ -401,12 +254,15 @@ def main():
     create_icns()
     
     # Build macOS app
-    if build_app():
+    if build_app_pyinstaller():
         print("App built successfully!")
         
         # Create DMG installer
-        if create_dmg():
-            print("DMG installer created successfully at: Music-RPC-Installer.dmg")
+        app_path = os.path.abspath("dist/Music RPC.app")
+        icon_path = "Music_RPC.icns" if os.path.exists("Music_RPC.icns") else None
+        
+        if create_dmg(app_path, icon_path):
+            print("DMG installer created successfully!")
         else:
             print("App built successfully but DMG creation failed. The app is still available in the 'dist' directory.")
     else:

@@ -230,7 +230,7 @@ class MusicRPCTrayApp(rumps.App):
             version = self.config.VERSION
             about_text = f"Music RPC {version}\n\n" \
                          f"Display your currently playing music on Discord.\n" \
-                         f"Supports multiple music players including Deezer, Apple Music, and more."
+                         f"Supports multiple music players including Deezer, Tidal, and more."
             rumps.alert(title="About Music RPC", message=about_text)
         except Exception as e:
             self.logger.error(f"Error displaying about dialog: {e}")
