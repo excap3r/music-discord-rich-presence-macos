@@ -107,7 +107,13 @@ Required to detect music players and read window titles
 2. Open the DMG file
 3. Drag the Music Discord Rich Presence app to your Applications folder
 4. Launch Music Discord Rich Presence from your Applications folder
-5. You'll see the 🎵 icon in your menu bar when the app is running
+5. **Important:** On first launch, macOS may block the app with a message "Music Discord Rich Presence Not Opened" This is normal for apps not from the App Store.
+   - Click "Done" on the warning popup
+   - Open System Settings → Privacy & Security
+   - Scroll down to find the message about the blocked app
+   - Click "Open Anyway" button
+   - Confirm in the next dialog by clicking "Open Anyway"
+6. You'll see the 🎵 icon in your menu bar when the app is running
 
 ---
 
