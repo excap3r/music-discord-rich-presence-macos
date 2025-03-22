@@ -16,9 +16,7 @@
 - [Features](#-features)
 - [Installation](#-installation)
 - [Usage](#-usage)
-- [Configuration](#-configuration)
 - [Troubleshooting](#-troubleshooting)
-- [Frequently Asked Questions](#-frequently-asked-questions)
 - [Credits](#-credits)
 - [License](#-license)
 
