@@ -1,24 +1,26 @@
 """
-Window manager for detecting and interacting with Deezer windows
+Window manager for detecting and interacting with music player windows
 """
 import subprocess
 from AppKit import NSWorkspace
 
 
-class DeezerWindow:
-    """Represents a Deezer window in macOS"""
+class MediaWindow:
+    """Represents a media player window in macOS"""
     
-    def __init__(self, title):
-        """Initialize with window title
+    def __init__(self, title, app_name=None):
+        """Initialize with window title and app name
         
         Args:
             title (str): The window title
+            app_name (str, optional): The application name
         """
         self.title = title
+        self.app_name = app_name or "Music Player"
 
 
 class WindowManager:
-    """Manages detection and interaction with Deezer windows"""
+    """Manages detection and interaction with media player windows"""
     
     def __init__(self, logger):
         """Initialize with logger
@@ -27,75 +29,110 @@ class WindowManager:
             logger: Logger instance for logging messages
         """
         self.logger = logger
+        # List of known media player bundle identifiers
+        self.known_media_players = [
+            "com.apple.Music",
+            "com.spotify.client",
+            "com.deezer.Deezer",  # Deezer's bundle ID
+            "com.apple.iTunes",
+            "org.videolan.vlc",
+            "co.neptunes.Audirvana",
+            "com.plexamp.plexamp"
+        ]
+        
+        # Keep track of the last detected Deezer window
+        self.last_deezer_window = None
     
-    def find_deezer_windows(self):
-        """Find all valid Deezer windows
+    def get_active_media_window(self):
+        """Find the current active media player window
         
         Returns:
-            list: List of DeezerWindow instances
+            MediaWindow or None: The active media window if found
         """
-        valid_deezer_windows = []
+        print(" ┃ 🔍 Detecting media player...")
         
-        # First, check if Deezer is running using process info
-        process_info = self.get_deezer_process_info()
-        if process_info and "running\": true" in process_info:
-            # Try to get window title via AppleScript (most reliable)
-            window_title = self._get_window_title_via_applescript()
-            if window_title:
-                valid_deezer_windows.append(DeezerWindow(window_title))
-                return valid_deezer_windows
+        # First try to detect Deezer specifically as it might need special handling
+        deezer_window = self._detect_deezer()
+        if deezer_window:
+            print(f" ┃ 🎵 Detected Deezer: {deezer_window.title}")
+            self.last_deezer_window = deezer_window
+            return deezer_window
         
-        # Fallback to NSWorkspace method
+        # First check if any music is playing via Apple Script
+        media_info = self._get_media_info_via_applescript()
+        if media_info and "title" in media_info and media_info["title"]:
+            print(f" ┃ 🎵 Detected playing: {media_info['title']}")
+            # If we suspect this might be Deezer but it wasn't identified
+            if self.last_deezer_window and not media_info.get('app_name'):
+                self.logger.info("Using last known Deezer window for player name")
+                media_info['app_name'] = "Deezer"
+            return MediaWindow(
+                f"{media_info.get('title', 'Unknown')} - {media_info.get('artist', 'Unknown Artist')}",
+                media_info.get('app_name', 'Media Player')
+            )
+        
+        # If no music is playing, check for running music applications
+        for player_id in self.known_media_players:
+            app_running = self._check_app_running(player_id)
+            if app_running:
+                app_name = player_id.split('.')[-1]
+                print(f" ┃ 🎵 Detected player: {app_name}")
+                return MediaWindow(f"{app_name} (Not playing)", app_name)
+        
+        # Fallback to NSWorkspace method to find any music player
         try:
             ws = NSWorkspace.sharedWorkspace()
             running_apps = ws.runningApplications()
             
-            deezer_apps = [app for app in running_apps if app.localizedName() and "deezer" in app.localizedName().lower()]
-            
-            if deezer_apps:
-                # Try to get window title via AppleScript
-                window_title = self._get_window_title_via_applescript()
-                if window_title:
-                    valid_deezer_windows.append(DeezerWindow(window_title))
-                else:
-                    # If we couldn't get the window title, use the app name
-                    valid_deezer_windows.append(DeezerWindow(deezer_apps[0].localizedName()))
+            for app in running_apps:
+                app_name = app.localizedName()
+                if app_name and any(media_name.lower() in app_name.lower() 
+                                    for media_name in ["music", "spotify", "deezer", "itunes", "vlc", "player"]):
+                    print(f" ┃ 🎵 Detected media player: {app_name}")
+                    return MediaWindow(app_name, app_name)
                 
         except Exception as e:
-            self.logger.error(f"Error finding Deezer windows: {e}")
+            self.logger.error(f"Error finding media windows: {e}")
         
-        return valid_deezer_windows
+        # If we found Deezer previously but couldn't detect it now, use the last known window
+        if self.last_deezer_window:
+            print(f" ┃ 🎵 Using last known Deezer window")
+            return self.last_deezer_window
+            
+        # Return a generic window for system media controls if no specific player is detected
+        return MediaWindow("System Media Controls", "Media Player")
     
-    def get_active_window_title(self):
-        """Get the title of the active window
+    def _detect_deezer(self):
+        """Specifically detect Deezer application
         
         Returns:
-            str: Window title or None if not found
+            MediaWindow or None: Deezer window if found
         """
-        print(" ┃ 🔍 Checking active window...")
         try:
-            workspace = NSWorkspace.sharedWorkspace()
-            frontmost_app = workspace.frontmostApplication()
-            frontmost_app_name = frontmost_app.localizedName()
+            # Fast check: Use pgrep first (much faster than AppleScript)
+            try:
+                deezer_check = subprocess.run(
+                    ["pgrep", "-i", "Deezer"],
+                    capture_output=True,
+                    encoding='utf-8',
+                    timeout=0.5
+                )
+                if deezer_check.stdout.strip():
+                    self.logger.info("Deezer is running (via pgrep)")
+                    return MediaWindow("Deezer", "Deezer")
+            except Exception as e:
+                self.logger.error(f"Error checking Deezer process with pgrep: {e}")
             
-            print(f" ┃ 🪟 Active app: {frontmost_app_name}")
+            # Only try the bundle ID check if pgrep fails
+            deezer_running = self._check_app_running("com.deezer.Deezer", timeout=1.0)
+            if deezer_running:
+                self.logger.info("Deezer is running (via bundle ID)")
+                return MediaWindow("Deezer", "Deezer")
             
-            if "deezer" in frontmost_app_name.lower():
-                print(" ┃ ✅ Deezer is active window")
-                # Try to get the current song using AppleScript
-                song_info = self._get_window_title_via_applescript()
-                if song_info:
-                    return song_info
-                return frontmost_app_name
-            else:
-                # Even if Deezer is not active, try to get its window title
-                song_info = self._get_window_title_via_applescript()
-                if song_info:
-                    return song_info
+            return None
         except Exception as e:
-            self.logger.error(f"Error getting active window title: {e}")
-        
-        return None
+            self.logger.error(f"Error in Deezer detection: {e}")
+            return None
     
     def check_accessibility_permissions(self):
         """Check if Terminal has accessibility permissions on macOS
@@ -135,120 +172,168 @@ class WindowManager:
             self.logger.error(f"Error checking accessibility permissions: {e}")
             return False
     
-    def _get_window_title_via_applescript(self):
-        """Get window title via AppleScript
+    def _check_app_running(self, bundle_id, timeout=2.0):
+        """Check if an app with the given bundle ID is running
         
+        Args:
+            bundle_id (str): The bundle identifier (e.g., com.apple.Music)
+            timeout (float): Timeout for the subprocess call
+            
         Returns:
-            str: Window title or None if not found
+            bool: True if the app is running, False otherwise
         """
-        print(" ┃ 🔍 Getting Deezer window title...")
         try:
-            script = '''
+            # Optimized AppleScript to directly check for a specific bundle ID
+            script = f'''
             tell application "System Events"
-                if exists process "Deezer" then
-                    tell process "Deezer"
-                        if exists window 1 then
-                            set windowName to name of window 1
-                            return windowName
-                        end if
-                    end tell
-                end if
+                return (bundle identifier of processes) contains "{bundle_id}"
             end tell
             '''
             
             result = subprocess.run(
-                ["osascript", "-e", script], 
-                capture_output=True, 
-                text=True
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=timeout
             )
             
-            if result.stdout.strip():
-                print(f" ┃ 🪟 Window title: {result.stdout.strip()}")
-                return result.stdout.strip()
-                
-            # If simple approach fails, try more advanced script
-            script_advanced = '''
-            on run
+            return result.stdout.strip().lower() == 'true'
+        except subprocess.TimeoutExpired:
+            self.logger.error(f"Timeout checking if {bundle_id} is running")
+            return False
+        except Exception as e:
+            self.logger.error(f"Error checking if {bundle_id} is running: {e}")
+            return False
+    
+    def _get_media_info_via_applescript(self):
+        """Get media info via AppleScript
+        
+        Returns:
+            dict: Media information including title, artist, and app name
+        """
+        print(" ┃ 🔍 Getting media information...")
+        
+        # Try the macOS Media API first (works for any app using system media controls)
+        script = '''
+        on run
+            set mediaInfo to {}
+            
+            -- Try Music app
+            try
+                tell application "Music"
+                    if it is running then
+                        if player state is playing then
+                            set end of mediaInfo to {app_name:"Music", title:(get name of current track), artist:(get artist of current track), playing:true}
+                            return mediaInfo
+                        end if
+                    end if
+                end tell
+            end try
+            
+            -- Try Spotify
+            try
+                tell application "Spotify"
+                    if it is running then
+                        if player state is playing then
+                            set end of mediaInfo to {app_name:"Spotify", title:(get name of current track), artist:(get artist of current track), playing:true}
+                            return mediaInfo
+                        end if
+                    end if
+                end tell
+            end try
+            
+            -- Try Deezer
+            try
                 tell application "Deezer"
                     if it is running then
                         try
                             tell application "System Events" to tell process "Deezer"
-                                if exists window 1 then
-                                    return name of window 1
+                                set windowTitle to name of window 1
+                                if windowTitle contains " - " then
+                                    set titleParts to my theSplit(windowTitle, " - ")
+                                    set end of mediaInfo to {app_name:"Deezer", title:item 1 of titleParts, artist:item 2 of titleParts, playing:true}
+                                    return mediaInfo
                                 end if
                             end tell
-                        on error
-                            # Could not get window title, try getting track info directly
-                            try
-                                set songName to name of current track
-                                set artistName to artist of current track
-                                return songName & " - " & artistName
-                            end try
                         end try
                     end if
                 end tell
-                return ""
-            end run
-            '''
+            end try
             
-            result_advanced = subprocess.run(
-                ["osascript", "-e", script_advanced], 
-                capture_output=True, 
-                text=True
-            )
-            
-            if result_advanced.stdout.strip():
-                print(f" ┃ 🪟 Advanced window title: {result_advanced.stdout.strip()}")
-                return result_advanced.stdout.strip()
+            -- Try system-wide nowPlaying
+            try
+                set currentTrack to do shell script "nowplaying-cli get-title"
+                set currentArtist to do shell script "nowplaying-cli get-artist"
+                set currentApp to do shell script "nowplaying-cli get-app"
                 
-        except Exception as e:
-            self.logger.error(f"Error executing AppleScript: {e}")
-        
-        print(" ┃ ⚠️ Could not get Deezer window title")
-        return None
-    
-    def get_deezer_process_info(self):
-        """Get information about the running Deezer process
-        
-        Returns:
-            dict: Deezer process information or None if not found
-        """
-        print(" ┃ 🔍 Checking Deezer process info...")
-        try:
-            script = '''
-            tell application "System Events"
-                set deezerRunning to false
-                set pid to 0
-                set processName to ""
-                
-                if exists process "Deezer" then
-                    set deezerRunning to true
-                    set deezerProcess to process "Deezer"
-                    set pid to id of deezerProcess
-                    set processName to name of deezerProcess
-                    
-                    set windowTitles to {}
-                    repeat with w in windows of deezerProcess
-                        copy name of w to end of windowTitles
-                    end repeat
-                    
-                    return "{\"running\": true, \"pid\": " & pid & ", \"name\": \"" & processName & "\", \"windows\": " & (count of windowTitles) & "}"
+                if currentTrack is not "" and currentArtist is not "" then
+                    set end of mediaInfo to {app_name:currentApp, title:currentTrack, artist:currentArtist, playing:true}
+                    return mediaInfo
                 end if
-                
-                return "{\"running\": false}"
-            end tell
-            '''
+            end try
             
+            return {}
+        end run
+        
+        on theSplit(theString, theDelimiter)
+            set oldDelimiters to AppleScript's text item delimiters
+            set AppleScript's text item delimiters to theDelimiter
+            set theArray to every text item of theString
+            set AppleScript's text item delimiters to oldDelimiters
+            return theArray
+        end theSplit
+        '''
+        
+        try:
             result = subprocess.run(
-                ["osascript", "-e", script], 
-                capture_output=True, 
+                ["osascript", "-e", script],
+                capture_output=True,
                 text=True
             )
             
-            if result.stdout.strip():
-                print(f" ┃ 🖥️ Deezer process info: {result.stdout.strip()}")
-                return result.stdout.strip()
-        except Exception as e:
-            self.logger.error(f"Error getting Deezer process info: {e}")
+            output = result.stdout.strip()
+            if not output or output == "{}":
+                return None
             
+            # Parse the AppleScript output
+            # Format is typically {app_name:"App", title:"Title", artist:"Artist", playing:true}
+            media_info = {}
+            
+            # Simple parser for the AppleScript record
+            if output.startswith("{") and output.endswith("}"):
+                # Remove the outer braces
+                inner_content = output[1:-1].strip()
+                
+                # Split by commas outside of quotes
+                parts = []
+                current_part = ""
+                in_quotes = False
+                
+                for char in inner_content:
+                    if char == '"' and (not current_part or current_part[-1] != '\\'):
+                        in_quotes = not in_quotes
+                    
+                    if char == ',' and not in_quotes:
+                        parts.append(current_part.strip())
+                        current_part = ""
+                    else:
+                        current_part += char
+                
+                if current_part:
+                    parts.append(current_part.strip())
+                
+                # Extract key-value pairs
+                for part in parts:
+                    if ":" in part:
+                        key, value = part.split(":", 1)
+                        key = key.strip()
+                        value = value.strip().strip('"')
+                        media_info[key] = value
+            
+            if media_info:
+                return media_info
+                
+        except Exception as e:
+            self.logger.error(f"Error getting media info: {e}")
+        
         return None 

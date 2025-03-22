@@ -3,3 +3,6 @@ pypresence
 requests
 pyobjc-framework-Quartz
 pyobjc-framework-MediaPlayer
+rumps
+py2app
+dmgbuild
