@@ -18,51 +18,52 @@
 
 ## 📋 Contents
 
-- [🔍 About](#about)
-- [✨ Features](#features)
-- [📥 Installation](#installation)
-  - [📋 Requirements](#requirements)
-  - [🔐 System Permissions](#system-permissions)
-  - [🔧 Prerequisites](#prerequisites)
-  - [💿 Installation Options](#option-1-dmg-installer-recommended)
-- [🎮 Usage](#usage)
-  - [🚀 Getting Started](#getting-started)
-  - [🔍 How Song Detection Works](#how-song-detection-works)
-  - [📊 Menu Bar Options](#menu-bar-options)
-  - [🔗 Discord Integration](#discord-integration)
-  - [⏰ Auto-Launch on Startup](#auto-launch-on-startup)
-- [⚙️ Configuration](#configuration)
-  - [📄 Configuration File](#configuration-file)
-  - [🛠️ Core Settings](#core-settings)
-  - [💬 Discord Settings](#discord-settings)
-  - [💻 Command-Line Arguments](#command-line-arguments)
-  - [🔧 Advanced Configuration](#advanced-configuration)
-- [❓ Troubleshooting](#troubleshooting)
-  - [🚫 Common Issues](#common-issues)
-  - [📝 Log File](#log-file)
-  - [🗑️ Uninstallation](#uninstallation)
-- [🏗️ Architecture](#architecture)
-  - [🧩 Core Components](#core-components)
-  - [🎵 Song Information Retrieval](#song-information-retrieval)
-  - [📂 Project Structure](#project-structure)
-- [💻 Development](#development)
-  - [🔧 Development Environment Setup](#development-environment-setup)
-  - [▶️ Running in Development Mode](#running-in-development-mode)
-  - [🖌️ Adding UI Features](#adding-ui-features)
-  - [📦 Building and Packaging](#building-and-packaging)
-  - [🧪 Testing](#testing)
-  - [📝 Code Style Guidelines](#code-style-guidelines)
-  - [💡 Development Tips](#development-tips)
-- [🤝 Contributing](#contributing)
-- [🔮 Future Improvements](#future-improvements)
-  - [🎯 Planned Features](#planned-features)
-  - [🗺️ Development Roadmap](#development-roadmap)
-- [❓ Frequently Asked Questions](#frequently-asked-questions)
-  - [🔍 General Questions](#general-questions)
-  - [⚙️ Technical Questions](#technical-questions)
-  - [🔧 Troubleshooting FAQ](#troubleshooting)
-- [👏 Credits](#credits)
-- [📄 License](#license)
+- [About](#-about)
+- [Features](#-features)
+- [Installation](#-installation)
+  - [Requirements](#-requirements)
+  - [System Permissions](#-system-permissions)
+  - [Prerequisites](#-prerequisites)
+  - [Installation Options](#-installation-options)
+- [Usage](#-usage)
+  - [Quick Start Guide](#-quick-start-guide)
+  - [Getting Started](#-getting-started)
+  - [How Song Detection Works](#-how-song-detection-works)
+  - [Menu Bar Options](#-menu-bar-options)
+  - [Discord Integration](#-discord-integration)
+  - [Auto-Launch on Startup](#-auto-launch-on-startup)
+- [Configuration](#-configuration)
+  - [Configuration File](#-configuration-file)
+  - [Core Settings](#-core-settings)
+  - [Discord Settings](#-discord-settings)
+  - [Command-Line Arguments](#-command-line-arguments)
+  - [Advanced Configuration](#-advanced-configuration)
+- [Troubleshooting](#-troubleshooting)
+  - [Common Issues](#-common-issues)
+  - [Log File](#-log-file)
+  - [Uninstallation](#-uninstallation)
+- [Architecture](#-architecture)
+  - [Core Components](#-core-components)
+  - [Song Information Retrieval](#-song-information-retrieval)
+  - [Project Structure](#-project-structure)
+- [Development](#-development)
+  - [Development Environment Setup](#-development-environment-setup)
+  - [Running in Development Mode](#-running-in-development-mode)
+  - [Adding UI Features](#-adding-ui-features)
+  - [Building and Packaging](#-building-and-packaging)
+  - [Testing](#-testing)
+  - [Code Style Guidelines](#-code-style-guidelines)
+  - [Development Tips](#-development-tips)
+- [Contributing](#-contributing)
+- [Future Improvements](#-future-improvements)
+  - [Planned Features](#-planned-features)
+  - [Development Roadmap](#-development-roadmap)
+- [Frequently Asked Questions](#-frequently-asked-questions)
+  - [General Questions](#-general-questions)
+  - [Technical Questions](#-technical-questions)
+  - [Troubleshooting FAQ](#-troubleshooting-faq)
+- [Credits](#-credits)
+- [License](#-license)
 
 ---
 
@@ -256,11 +257,10 @@ This CLI tool is required for retrieving currently playing song information from
 
 ### 🔍 How Song Detection Works
 
-Music Discord Rich Presence uses multiple methods to detect and retrieve song information:
+Music Discord Rich Presence uses two primary methods to detect and retrieve song information:
 
 1. **nowplaying-cli**: The primary method uses the Media Remote API via nowplaying-cli to get detailed song information from the system's current media player.
-2. **Window Title Parsing**: For some players like Deezer, the app can extract song information from the window title.
-3. **Process Detection**: The app checks which music player applications are currently running.
+2. **Process Detection**: The app checks which music player applications are currently running.
 
 This multi-layered approach ensures reliable song detection across different players.
 
@@ -474,8 +474,7 @@ Music Discord Rich Presence for macOS is built with a modular architecture that 
 
 - **🎮 App**: The main application controller that orchestrates all components
 - **🔗 Discord Presence**: Manages the Discord Rich Presence connection and updates
-- **🪟 Window Manager**: Detects and manages window titles for song information extraction
-- **🎵 Song Info**: Processes and enriches song information from various sources using nowplaying-cli and other methods
+- **🎵 Song Info**: Processes and enriches song information from various sources using nowplaying-cli
 
 ### 🎵 Song Information Retrieval
 
@@ -483,8 +482,7 @@ The `SongInfoRetriever` class handles all song detection using these methods:
 
 1. **📱 Media Remote API**: Uses nowplaying-cli to access the macOS Media Remote API
 2. **🔍 Process Detection**: Checks running processes to identify active media players
-3. **🪟 Window Title Parsing**: Extracts song info from application window titles
-4. **🌐 API Enrichment**: Enhances song info with additional metadata from the Deezer API
+3. **🌐 API Enrichment**: Enhances song info with additional metadata from the Deezer API
 
 ### 📂 Project Structure
 
@@ -494,8 +492,7 @@ music-rpc/
 │   ├── core/               # Core functionality
 │   │   ├── app.py          # Main application class
 │   │   ├── discord_presence.py  # Discord integration
-│   │   ├── song_info.py    # Song info processing
-│   │   └── window_manager.py  # Window detection
+│   │   └── song_info.py    # Song info processing
 │   ├── ui/                 # UI components
 │   │   └── tray_icon.py    # System tray icon
 │   ├── config/             # Configuration
@@ -748,7 +745,7 @@ No. The app only reads information about your currently playing music and sends 
 <details>
 <summary><b>Why does the app need Accessibility and Screen Recording permissions?</b></summary>
 
-These permissions are required to detect music players and read window titles to extract song information. The app never records your screen content.
+These permissions are required to detect music players when using the Media Remote API. The app never records your screen content.
 </details>
 
 <details>
