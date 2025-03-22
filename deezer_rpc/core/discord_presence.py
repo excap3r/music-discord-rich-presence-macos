@@ -75,8 +75,10 @@ class DiscordPresenceManager:
         
         try:
             # Ensure we have valid values for the RPC
-            details = f"🎧 Listening to {song_info.title}"
-            state = f"🎤 {song_info.artist}" if song_info.artist else "Unknown Artist"
+            # We can't set the activity type to "Listening" due to Discord API limitations
+            # But we can make the text read "Listening to" to clarify the activity
+            details = f"Listening to {song_info.title}"
+            state = f"by {song_info.artist}" if song_info.artist else "Unknown Artist"
             
             # Discord rich presence supports both built-in assets and full URLs
             # Determine which to use
@@ -95,14 +97,28 @@ class DiscordPresenceManager:
                 # Fallback if there's an encoding issue
                 print(f" ┃ 🎵 Now playing: [Song title with special characters] by {song_info.artist}")
             
+            # Calculate timestamps for song progress
+            current_time = int(time.time())
+            start_time = current_time - int(song_info.elapsed)  # When the song started
+            end_time = 0
+            
+            # Only set end timestamp if we have a valid duration
+            if song_info.duration > 0:
+                end_time = current_time + int(song_info.duration - song_info.elapsed)
+                
             update_data = {
                 "details": details,
                 "state": state,
                 "large_image": large_image,
                 "large_text": song_info.title if song_info.title else "Deezer",
                 "small_image": small_image,
-                "small_text": song_info.artist if song_info.artist else "Deezer"
+                "small_text": song_info.artist if song_info.artist else "Deezer",
+                "start": start_time
             }
+            
+            # Add end timestamp if we have a valid duration
+            if end_time > current_time:
+                update_data["end"] = end_time
             
             # Add buttons if available
             if buttons:
