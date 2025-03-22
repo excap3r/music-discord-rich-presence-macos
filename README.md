@@ -157,30 +157,6 @@ To make the app start automatically when you log in:
 
 ---
 
-## ⚙️ Configuration
-
-### 📄 Configuration File
-
-The app stores its configuration in:
-`~/Library/Application Support/Music Discord Rich Presence/config.json`
-
-### 🛠️ Core Settings
-
-| Setting | Description | Default | Possible Values |
-|---------|-------------|---------|----------------|
-| `update_interval` | How often to check for song changes (in seconds) | `10` | `5`, `10`, `30` |
-
-### 💬 Discord Settings
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `USE_ALBUM_ART` | Whether to show album art in Discord status | `true` |
-| `DISABLED_PLAYERS` | List of players that have Discord integration disabled | `["Music"]` |
-
-*Note: You can also disable Discord integration via command line with the `--disable-discord` flag.*
-
----
-
 ## ❓ Troubleshooting
 
 ### 🚫 Common Issues
